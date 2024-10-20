@@ -1,5 +1,6 @@
 package com.duchastel.simon.mtadatavisualizer.ui.ridershipticker
 
+import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.material.Button
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -17,10 +18,13 @@ fun RidershipTickerScreen() {
     val ridership = state.ridership
 
     when {
-        ridership != null -> RidershipTicker( // success!
-            dayOfWeek = ridership.dayOfWeek,
-            ridership = ridership.totalRidership,
-        )
+        ridership != null -> { // success!
+            val ridershipTicker by animateIntAsState(ridership.totalRidership)
+            RidershipTicker(
+                dayOfWeek = ridership.dayOfWeek,
+                ridership = ridershipTicker,
+            )
+        }
         state.hasError -> Error(onRetryClicked = viewModel::retry) // error
         else -> Loading() // loading
     }
@@ -29,7 +33,7 @@ fun RidershipTickerScreen() {
 @Composable
 private fun RidershipTicker(
     dayOfWeek: WeekDay,
-    ridership: Long,
+    ridership: Int,
 ) {
     FullScreenColumnCentered {
         Text(

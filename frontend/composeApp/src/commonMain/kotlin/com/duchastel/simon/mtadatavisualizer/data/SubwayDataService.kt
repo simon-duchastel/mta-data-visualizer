@@ -65,7 +65,7 @@ class SubwayDataService(
         @Serializable(with = WeekDaySerializer::class)
         val dayOfWeek: WeekDay,
         @SerialName("subway_ridership")
-        val totalRidership: Long,
+        val totalRidership: Int,
     )
 
     companion object {
