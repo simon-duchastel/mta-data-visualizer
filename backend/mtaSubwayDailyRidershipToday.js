@@ -38,7 +38,8 @@ export async function handler() {
             };
         }
 
-        const subwayRidership = data.Item.subway_ridership.N; // Get the ridership count as a number
+        // Get the ridership count as a number and return it in the API
+        const subwayRidership = parseInt(data.Item.subway_ridership.N);
         return {
             statusCode: 200,
             body: JSON.stringify({
