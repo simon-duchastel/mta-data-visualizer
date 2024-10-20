@@ -8,4 +8,4 @@ Visualization of the MTA's subway data. Occasionally runs an aggregation of the 
 
 **URL:** https://data.ny.gov/Transportation/MTA-Daily-Ridership-Data-Beginning-2020/vxuj-8kew/about_data
 
-Dataset updated daily
+The daily ridership dataset provides systemwide ridership and traffic estimates for subways (including the Staten Island Railway), buses, Long Island Rail Road, Metro-North Railroad, Access-A-Ride, and Bridges and Tunnels, beginning 3/1/2020, and provides a percentage comparison against a comparable pre-pandemic date.
