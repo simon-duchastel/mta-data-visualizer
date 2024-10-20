@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.jetbrainsCompose)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
@@ -32,6 +33,7 @@ kotlin {
     sourceSets {
         
         commonMain.dependencies {
+            // Compose
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material)
@@ -39,7 +41,16 @@ kotlin {
             implementation(compose.components.resources)
             implementation(compose.components.uiToolingPreview)
             implementation(libs.androidx.lifecycle.viewmodel)
+            implementation(libs.androidx.lifecycle.viewmodel.compose)
             implementation(libs.androidx.lifecycle.runtime.compose)
+
+            // Networking
+            implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.json)
+            implementation(libs.ktor.client.serialization)
+            implementation(libs.ktor.serialization.kotlinx.json)
+            implementation(libs.kotlinx.serialization.core)
+            implementation(libs.kotlinx.serialization.json)
         }
     }
 }
