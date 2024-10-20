@@ -5,5 +5,7 @@ Visualization of the MTA's subway data. Occasionally runs an aggregation of the 
 ## Datasets used
 
 ### MTA Daily Ridership Data: Beginning 2020
+
 **URL:** https://data.ny.gov/Transportation/MTA-Daily-Ridership-Data-Beginning-2020/vxuj-8kew/about_data
+
 Dataset updated daily
