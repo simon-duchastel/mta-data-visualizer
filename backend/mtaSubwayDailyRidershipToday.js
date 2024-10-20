@@ -11,8 +11,14 @@ export async function handler() {
      * AWS Lambda handler to retrieve the current day's subway ridership from DynamoDB.
      */
     try {
-        const today = new Date();
-        const dayOfWeek = today.toLocaleString('en-US', { weekday: 'short' });
+        // use EST where the NYC MTA operates to get the current date in NYC
+        const timeZone = "America/New_York"
+        const today = new Date()
+        const dateFormatter = new Intl.DateTimeFormat('en-US', {
+            weekday: "short",
+            timeZone: timeZone,
+          })
+        const dayOfWeek = dateFormatter.format(today);
 
         // Query DynamoDB for today's ridership data
         const params = {
