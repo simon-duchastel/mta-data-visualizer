@@ -1,8 +1,9 @@
-const axios = require('axios');
-const AWS = require('aws-sdk');
+import { DynamoDBClient, } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, BatchWriteCommand} from "@aws-sdk/lib-dynamodb";
 
 // Initialize DynamoDB
-const dynamodb = new AWS.DynamoDB.DocumentClient();
+const dynamodb = new DynamoDBClient({ region: "us-west-2" });
+const dynamodbClient = DynamoDBDocumentClient.from(dynamodb);
 const tableName = 'MTA_Subway_Daily_Ridership';
 
 // MTA Ridership API endpoint
@@ -19,21 +20,30 @@ async function fetchMtaData() {
     const dateStringToday = today.toISOString().split('T')[0];  // YYYY-MM-DD format
     const dateStringTwoWeeksAgo = twoWeeksAgo.toISOString().split('T')[0];
 
-    const params = {
-        '$select': 'date, subways_total_estimated_ridership',
-        '$where': `date between '${dateStringTwoWeeksAgo}' and '${dateStringToday}'`,
-        '$order': 'date DESC'
-    };
+    const selectClause = "$select=date,subways_total_estimated_ridership";
+    const whereClause = `$where=date between '${dateStringTwoWeeksAgo}' and '${dateStringToday}'`;
+    const orderClause = "$order=date DESC";
+    const url = encodeURI(`${MTA_API_URL}?${selectClause}&${whereClause}&${orderClause}`);
 
-    try {
-        const response = await axios.get(MTA_API_URL, { params });
-        return response.data;
-    } catch (error) {
-        throw new Error(`Error fetching data from MTA API: ${error.message}`);
-    }
+    return fetch(url)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Error making HTTP request to MTA data: ${response.status} ${response.statusText}`);
+            }
+
+            console.log(`Received ${response.status} from ${response.url}`);
+            return response.json();
+        }).then((data) => {
+            const stringifiedData = JSON.stringify(data);
+            console.log(`Parsed json response: ${stringifiedData}`);
+            return data
+        })
+        .catch(error => {
+            throw new Error(`Error fetching data from MTA API: ${error.message}`);
+        });
 }
 
-function groupByDayOfWeek(data) {
+function getSubwayRidershipByDayOfWeek(data) {
     /**
      * Group data by day of the week, keeping only the most recent entry for each day.
      */
@@ -43,10 +53,13 @@ function groupByDayOfWeek(data) {
         const date = new Date(entry.date);
         const dayOfWeek = date.toLocaleString('en-US', { weekday: 'short' });
 
-        if (!dayOfWeekMap[dayOfWeek]) {
-            dayOfWeekMap[dayOfWeek] = entry;  // Take the most recent entry
+        const subwayRidership = parseInt(entry.subways_total_estimated_ridership)
+        if (!dayOfWeekMap[dayOfWeek] && subwayRidership && subwayRidership > 0) {
+            dayOfWeekMap[dayOfWeek] = subwayRidership;  // Take the most recent entry
         }
     });
+
+    console.log(`Created updated dayOfWeek mapping: ${JSON.stringify(dayOfWeekMap)}`);
 
     return dayOfWeekMap;
 }
@@ -55,11 +68,12 @@ async function storeToDynamoDB(data) {
     /**
      * Store processed MTA data in DynamoDB, with 'day_of_week' as the key.
      */
-    const putRequests = Object.keys(data).map(dayOfWeek => ({
+    const dataKeys = Object.keys(data);
+    const putRequests = dataKeys.map(dayOfWeek => ({
         PutRequest: {
             Item: {
                 day_of_week: dayOfWeek,  // Use day of the week as the key
-                subways_ridership: data[dayOfWeek].subways_total_estimated_ridership
+                subway_ridership: data[dayOfWeek],
             }
         }
     }));
@@ -71,22 +85,27 @@ async function storeToDynamoDB(data) {
     };
 
     try {
-        await dynamodb.batchWrite(batchParams).promise();
+        await dynamodbClient.send(new BatchWriteCommand(batchParams));
+        console.log(`Successfully updated ${dataKeys.length} values in ${tableName}`);
     } catch (error) {
         throw new Error(`Error storing data in DynamoDB: ${error.message}`);
     }
 }
 
-exports.handler = async (event) => {
+export async function handler() {
     /**
      * AWS Lambda handler to fetch, process, and store MTA ridership data.
      */
     try {
         // Step 1: Fetch the MTA ridership data for the last 2 weeks
+        const fetchStart = new Date();
         const mtaData = await fetchMtaData();
+        const fetchEnd = new Date();
+        console.log(`${MTA_API_URL} call duration: ${(fetchEnd - fetchStart) / 1000} seconds`);
+
 
         // Step 2: Group the data by day of the week (keeping only the most recent entry for each day)
-        const groupedData = groupByDayOfWeek(mtaData);
+        const groupedData = getSubwayRidershipByDayOfWeek(mtaData);
 
         // Step 3: Store the data into DynamoDB
         await storeToDynamoDB(groupedData);
@@ -101,4 +120,4 @@ exports.handler = async (event) => {
             body: JSON.stringify(`Error: ${error.message}`)
         };
     }
-};
+}
