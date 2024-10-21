@@ -5,6 +5,7 @@ junit = "4.13.2"
 kotlin = "2.0.20"
 ktor = "3.0.0"
 serialization = "1.7.3"
+kotlinx-datetime = "0.6.1"
 
 [libraries]
 # Kotlin
@@ -22,6 +23,9 @@ ktor-client-serialization = { group = "io.ktor", name = "ktor-client-serializati
 ktor-serialization-kotlinx-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
 kotlinx-serialization-core = { module = "org.jetbrains.kotlinx:kotlinx-serialization-core", version.ref = "serialization" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+
+## Time
+kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
 
 [plugins]
 jetbrainsCompose = { id = "org.jetbrains.compose", version.ref = "compose-plugin" }

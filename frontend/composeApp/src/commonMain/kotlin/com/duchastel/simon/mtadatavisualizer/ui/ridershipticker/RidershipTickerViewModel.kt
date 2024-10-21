@@ -28,17 +28,23 @@ class RidershipTickerViewModel(
         fetchRidership()
 
         viewModelScope.launch {
-            _state
-                .collect { state ->
-                    if (state.ridership != null && state.ridershipPerSecond != null) {
-                        delay(100)
-                        val newRidership = state.ridership.totalRidership +
-                                (state.ridershipPerSecond / 10f).toInt() // normalize to 100ms
-                        updateState {
-                            copy(ridership = state.ridership.copy(totalRidership = newRidership))
-                        }
+            _state.collect { state ->
+                if (state.ridership != null && state.ridershipPerSecond != null) {
+                    delay(STATE_UPDATE_DELAY_MS)
+
+                    // normalize to the frequency we're updating the state
+                    val factor: Float = 1_000f / STATE_UPDATE_DELAY_MS
+                    val newRidership = state.ridership.estimatedRidershipSoFar +
+                            (state.ridershipPerSecond / factor).toInt()
+                    updateState {
+                        copy(
+                            ridership = state.ridership.copy(
+                                estimatedRidershipSoFar = newRidership
+                            )
+                        )
                     }
                 }
+            }
         }
     }
 
@@ -58,7 +64,7 @@ class RidershipTickerViewModel(
             val ridership = subwayDataService.getTodaysRidership()
 
             val ridershipPerSecond = ridership?.let {
-                it.totalRidership / 24f / 60f / 60f
+                it.estimatedRidershipToday / 24f / 60f / 60f
             }
             updateState {
                 copy(
@@ -72,5 +78,9 @@ class RidershipTickerViewModel(
 
     private fun updateState(newState: State.() -> State) {
         _state.value = _state.value.newState()
+    }
+
+    companion object {
+        private const val STATE_UPDATE_DELAY_MS = 100L
     }
 }

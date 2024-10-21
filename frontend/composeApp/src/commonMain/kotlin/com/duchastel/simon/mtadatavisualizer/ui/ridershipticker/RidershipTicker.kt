@@ -19,7 +19,7 @@ fun RidershipTickerScreen() {
 
     when {
         ridership != null -> { // success!
-            val ridershipTicker by animateIntAsState(ridership.totalRidership)
+            val ridershipTicker by animateIntAsState(ridership.estimatedRidershipSoFar)
             RidershipTicker(
                 dayOfWeek = ridership.dayOfWeek,
                 ridership = ridershipTicker,
