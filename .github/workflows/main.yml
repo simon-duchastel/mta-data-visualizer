@@ -1,0 +1,48 @@
+# This workflow publishes the website
+# ie. uploads the website and pushes the commit to the public repo
+
+name: Publish Website
+
+# Publish the website on commits to "main"
+on:
+  # Triggers the workflow on push events but only for the "main" branch
+  push:
+    branches: [ "main" ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  # Deploy the website to the webserver
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: create SSH config file
+        env: 
+          USERNAME: ${{ secrets.username }}
+          PASSWORD: ${{ secrets.password }}
+          ADDRESS: ${{ secrets.address }}
+          MODE: insecure
+        run: |
+          echo "$USERNAME" >> ssh.config
+          echo "$PASSWORD" >> ssh.config
+          echo "$ADDRESS" >> ssh.config
+          echo "$MODE" >> ssh.config
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 17
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Build with Gradle
+        run: ./gradlew assemble
+
+      - name: Move the built website to /public for upload
+        run: mv ./composeApp/build/dist/wasmJs/productionExecutable ./public
+      
+      - name: Upload the website
+        run: ./website -subdomain mtadatavisualizer upload
