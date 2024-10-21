@@ -1,0 +1,3 @@
+[submodule "frontend/website-upload-tool"]
+	path = frontend/website-upload-tool
+	url = https://github.com/simon-duchastel/website-upload-tool.git
