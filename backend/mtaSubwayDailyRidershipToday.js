@@ -11,20 +11,35 @@ const timeZoneEST = "America/New_York";
 
 // Function to calculate percentage of day passed in EST. Returns a float.
 function calculateDayProgressInEST() {
+    // get the current time and midnight (note this is localized to whatever timezone the
+    // lambda is running in)
     const now = new Date();
+    const midnight = new Date();
+    midnight.setUTCHours(0, 0, 0, 0);
 
-    // Current time in EST
-    const options = { timeZone: timeZoneEST, hour12: false };
-    const currentEST = new Date(now.toLocaleString('en-US', options));
-
-    // Start of the day in EST
-    const startOfDayEST = new Date(currentEST);
-    startOfDayEST.setHours(0, 0, 0, 0); // Midnight in EST
-
-    // Calculate the elapsed seconds so far and then get a ratio from the total seconds
+    // Calculate the elapsed time in ms
     const totalSecondsInDay = 24 * 60 * 60; // 24hrs x 60min x 60s
-    const elapsedSeconds = Math.floor((currentEST - startOfDayEST) / 1000); // divide by 1000 to convert ms to s
+    const offsetMsFromEST = getOffsetFromEST();
+    var elapsedMs = now - midnight;
+
+    // adjust for the EST offest
+    if (elapsedMs < offsetMsFromEST) {
+        // if the elapsed time is less than the offset, then we're in a different day than EST.
+        // we account for that by adding a day hours after subtracting
+        const totalMsInDay = totalSecondsInDay * 1000;
+        elapsedMs += totalMsInDay;
+    }
+    elapsedMs -= offsetMsFromEST;
+    
+    const elapsedSeconds = elapsedMs /= 1000; // convert ms to s
     return elapsedSeconds / totalSecondsInDay;
+}
+
+function getOffsetFromEST() {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0, 0,)
+    const est = new Date(now.toLocaleString("en-US", { timeZone: timeZoneEST }));
+    return now - est; // difference between current time and EST-normalized in ms
 }
 
 export async function handler() {
@@ -33,11 +48,10 @@ export async function handler() {
      * and calculate estimated ridership based on the percentage of the day passed.
      */
     try {
-        const timeZone = "America/New_York";
         const today = new Date();
         const dateFormatter = new Intl.DateTimeFormat('en-US', {
             weekday: "short",
-            timeZone: timeZone,
+            timeZone: timeZoneEST,
         });
         const dayOfWeek = dateFormatter.format(today);
 
@@ -63,6 +77,8 @@ export async function handler() {
         const subwayRidership = parseInt(data.Item.subway_ridership.N);
         const dayProgress = calculateDayProgressInEST();
         const estimatedRidershipSoFar = Math.floor(subwayRidership * dayProgress);
+
+        console.log(`Calculated that the day is ${dayProgress * 100}% in progresss`);
         return {
             statusCode: 200,
             body: JSON.stringify({
