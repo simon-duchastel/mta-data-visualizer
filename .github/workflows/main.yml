@@ -19,6 +19,17 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Install website tool
+        run: |
+          git submodule init
+          git submodule update
+
+      - name: Build website tool
+        run: |
+          make clean
+          make
+        working-directory: frontend
+
       - name: create SSH config file
         env: 
           USERNAME: ${{ secrets.username }}
@@ -30,19 +41,25 @@ jobs:
           echo "$PASSWORD" >> ssh.config
           echo "$ADDRESS" >> ssh.config
           echo "$MODE" >> ssh.config
+        working-directory: frontend
 
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: 17
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+
       - name: Build with Gradle
         run: ./gradlew assemble
+        working-directory: frontend
 
       - name: Move the built website to /public for upload
         run: mv ./composeApp/build/dist/wasmJs/productionExecutable ./public
-      
+        working-directory: frontend
+
       - name: Upload the website
         run: ./website -subdomain mtadatavisualizer upload
+        working-directory: frontend
