@@ -1,5 +1,5 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, BatchWriteCommand} from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, BatchWriteCommand } from "@aws-sdk/lib-dynamodb";
 
 // Initialize DynamoDB
 const dynamodb = new DynamoDBClient({ region: "us-west-2" });
