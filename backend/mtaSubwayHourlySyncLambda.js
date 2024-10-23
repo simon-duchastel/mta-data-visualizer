@@ -27,7 +27,23 @@ async function fetchMtaData(offset = 0, limit = chunkSize) {
 }
 
 async function fetchAndAggregateData() {
-    const hourlyRidership = { Sun: {}, Mon: {}, Tue: {}, Wed: {}, Thu: {}, Fri: {}, Sat: {} };
+    const hourlyRidership = {
+        Sun: {
+            hours: []
+        }, Mon: {
+            hours: []
+        }, Tue: {
+            hours: []
+        }, Wed: {
+            hours: []
+        }, Thu: {
+            hours: []
+        }, Fri: {
+            hours: []
+        }, Sat: {
+            hours: []
+        } 
+    };
     let offset = 0;
     let firstDate = null;
     let chunk;
@@ -44,13 +60,14 @@ async function fetchAndAggregateData() {
             lastAllowedDate.setDate(firstDate.getDate() - 7);
         }
 
-        processChunk(chunk, hourlyRidership, lastAllowedDate);
+        hourlyRidership = processChunk(chunk, hourlyRidership, lastAllowedDate);
         offset += chunk.length;
 
         lastDateInChunk = new Date(chunk[chunk.length - 1]?.transit_timestamp);
     } while (chunk.length === chunkSize && lastDateInChunk >= lastAllowedDate);
 
-    ensureFullDayHours(hourlyRidership);
+    hourlyRidership = ensureFullDayHours(hourlyRidership);
+    hourlyRidership = populateDailyRidership(hourlyRidership);
     return hourlyRidership;
 }
 
@@ -63,14 +80,14 @@ function processChunk(chunk, hourlyRidership, lastAllowedDate) {
             const dayOfWeek = date.toLocaleString('en-US', { weekday: 'short' });
             const hour = date.getHours();
 
-            if (!hourlyRidership[dayOfWeek][hour]) {
-                hourlyRidership[dayOfWeek][hour] = 0;
+            if (!hourlyRidership[dayOfWeek]["hours"][hour]) {
+                hourlyRidership[dayOfWeek]["hours"][hour] = 0;
             }
 
-            hourlyRidership[dayOfWeek][hour] += parseInt(entry.ridership) || 0;
+            hourlyRidership[dayOfWeek]["hours"][hour] += parseInt(entry.ridership) || 0;
         }
     });
-    console.log(JSON.stringify(hourlyRidership));
+    return hourlyRidership;
 }
 
 // do a pass to ensure that each hour has populated,
@@ -83,6 +100,28 @@ function ensureFullDayHours(hourlyRidership) {
             }
         }
     });
+    return hourlyRidership;
+}
+
+// Add daily ridership to each day and add % of daily ridership
+// to each hour
+function populateDailyRidership(hourlyRidership) {
+    for (day in hourlyRidership) {
+        let dailyTotal = 0;
+
+        hourlyRidership[day]["hours"].forEach(hourData => {
+            dailyTotal += hourData.ridership;
+        });
+
+        // add "dailyRidership" for the day
+        // add "percentOfDaily" to each hour
+        hourlyRidership[day].dailyRidership = dailyTotal;
+        hourlyRidership[day]["hours"].forEach(hourData => {
+            hourData.percentOfDaily = (hourData.ridership / dailyTotal);
+        });
+    }
+
+    return hourlyRidership;
 }
 
 async function storeToDynamoDB(data) {
@@ -100,8 +139,6 @@ async function storeToDynamoDB(data) {
             [tableName]: putRequests
         }
     };
-
-    console.log(JSON.stringify(batchParams));
 
     try {
         await dynamodbClient.send(new BatchWriteCommand(batchParams));
