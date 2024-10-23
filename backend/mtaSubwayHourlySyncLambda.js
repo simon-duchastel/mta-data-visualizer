@@ -27,7 +27,7 @@ async function fetchMtaData(offset = 0, limit = chunkSize) {
 }
 
 async function fetchAndAggregateData() {
-    const hourlyRidership = {
+    let hourlyRidership = {
         Sun: {
             hours: []
         }, Mon: {
@@ -81,10 +81,10 @@ function processChunk(chunk, hourlyRidership, lastAllowedDate) {
             const hour = date.getHours();
 
             if (!hourlyRidership[dayOfWeek]["hours"][hour]) {
-                hourlyRidership[dayOfWeek]["hours"][hour] = 0;
+                hourlyRidership[dayOfWeek]["hours"][hour] = { ridership: 0 };
             }
 
-            hourlyRidership[dayOfWeek]["hours"][hour] += parseInt(entry.ridership) || 0;
+            hourlyRidership[dayOfWeek]["hours"][hour].ridership += parseInt(entry.ridership) || 0;
         }
     });
     return hourlyRidership;
@@ -95,8 +95,8 @@ function processChunk(chunk, hourlyRidership, lastAllowedDate) {
 function ensureFullDayHours(hourlyRidership) {
     Object.keys(hourlyRidership).forEach(day => {
         for (let hour = 0; hour < 24; hour++) {
-            if (!hourlyRidership[day][hour]) {
-                hourlyRidership[day][hour] = 0;
+            if (!hourlyRidership[day]["hours"][hour]) {
+                hourlyRidership[day]["hours"][hour].ridership = 0;
             }
         }
     });
@@ -114,10 +114,10 @@ function populateDailyRidership(hourlyRidership) {
         });
 
         // add "dailyRidership" for the day
-        // add "percentOfDaily" to each hour
+        // add "percent_of_daily" to each hour
         hourlyRidership[day].dailyRidership = dailyTotal;
         hourlyRidership[day]["hours"].forEach(hourData => {
-            hourData.percentOfDaily = (hourData.ridership / dailyTotal);
+            hourData.percent_of_daily = (hourData.ridership / dailyTotal);
         });
     }
 
@@ -129,7 +129,8 @@ async function storeToDynamoDB(data) {
         PutRequest: {
             Item: {
                 day_of_week: dayOfWeek,
-                hourly_ridership: data[dayOfWeek]
+                daily_ridership: data[dayOfWeek].dailyRidership,
+                hourly_ridership: data[dayOfWeek]["hours"],
             }
         }
     }));
