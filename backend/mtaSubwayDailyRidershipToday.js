@@ -4,10 +4,12 @@ import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 // Initialize DynamoDB
 const dynamodb = new DynamoDBClient({ region: "us-west-2" });
 const dynamodbClient = DynamoDBDocumentClient.from(dynamodb);
-const tableName = 'MTA_Subway_Daily_Ridership';
+const dailyTableName = 'MTA_Subway_Daily_Ridership';
+const hourlyTableName = 'MTA_Subway_Hourly_Ridership';
 
 // Useful constants
 const timeZoneEST = "America/New_York";
+const secondsPerHour = 60 * 60;
 
 // Function to calculate percentage of day passed in EST. Returns a float.
 function calculateDayProgressInEST() {
@@ -55,26 +57,44 @@ export async function handler() {
         });
         const dayOfWeek = dateFormatter.format(today);
 
-        // Query DynamoDB for today's ridership data
-        const params = {
-            TableName: tableName,
+        // Query daily DynamoDB for today's ridership data
+        const dailyParams = {
+            TableName: dailyTableName,
             Key: {
                 day_of_week: { S: dayOfWeek }
             }
         };
+        const hourlyParams = {
+            TableName: hourlyTableName,
+            Key: {
+                day_of_week: { S: dayOfWeek }
+            }
+        }
 
-        const data = await dynamodbClient.send(new GetItemCommand(params));
+        const dailyData = await dynamodbClient.send(new GetItemCommand(dailyParams));
+        const hourlyData = await dynamodbClient.send(new GetItemCommand(hourlyParams));
 
         // Check if data was found
-        if (!data.Item) {
+        if (!dailyData.Item || !hourlyData.Item) {
             return {
                 statusCode: 404,
                 body: JSON.stringify({ message: `No data found for ${dayOfWeek}` }),
             };
         }
 
-        // Get the ridership from DynamoDB
-        const subwayRidership = parseInt(data.Item.subway_ridership.N);
+        // Get the daily ridership from DynamoDB
+        const subwayRidership = parseInt(dailyData.Item.subway_ridership.N);
+        
+        // Get the ridership per second for each hour based on hourly ridership percentage
+        const hourlyRidership = hourlyData.Item.hourly_ridership.L;
+        let ridershipPerSecond = [];
+        hourlyRidership.forEach(hour => {
+            const percentage = parseFloat(hour.M.percent_of_daily.N);
+            const perSecond = percentage * subwayRidership / secondsPerHour;
+            ridershipPerSecond.push(Number(perSecond.toFixed(2)));
+        });
+
+        // Calculate the estimated ridership so far in the day
         const dayProgress = calculateDayProgressInEST();
         const estimatedRidershipSoFar = Math.floor(subwayRidership * dayProgress);
 
@@ -85,6 +105,7 @@ export async function handler() {
                 day: dayOfWeek,
                 estimated_ridership_today: subwayRidership,
                 estimated_ridership_so_far: estimatedRidershipSoFar,
+                riders_per_second: ridershipPerSecond,
             }),
         };
     } catch (error) {
