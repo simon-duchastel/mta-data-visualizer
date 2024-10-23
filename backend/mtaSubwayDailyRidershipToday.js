@@ -86,27 +86,28 @@ export async function handler() {
         // Get the daily ridership from DynamoDB
         const subwayRidership = parseInt(dailyData.Item.subway_ridership.N);
 
-        // Get the hourly ridership per for each hour, scaled by daily ridership
-        // since the hourly ridership is an underestimate and daily ridership isn't
+        // Calculate a scale factor since the hourly ridership is an underestimate
+        // and daily ridership isn't
         const ridershipEstimatedFromHourly = parseInt(hourlyData.Item.daily_ridership.N);
         const ridershipRatio = subwayRidership / ridershipEstimatedFromHourly;
-        const hourlyRidership = hourlyData.Item.hourly_ridership.L;
-        let ridersPerHour = [];
-        hourlyRidership.forEach(hour => {
-            const scaledHourRidership = Math.floor(parseInt(hour.M.ridership.N) * ridershipRatio);
-            ridersPerHour.push(scaledHourRidership);
-        });
 
         // Calculate the estimated ridership so far in the day by adding up the ridership of
-        // each hour that has already passed plus the ridership of the current hour
+        // each hour that has already passed plus the ridership of the current hour.
+        // Scale by daily ridership factor.
         const dayProgress = calculateDayProgressInEST();
         const numHoursPassed = Math.floor(dayProgress * hoursPerDay);
         const percentOfHourPassed = (dayProgress * hoursPerDay) - numHoursPassed;
+        const hourlyRidership = hourlyData.Item.hourly_ridership.L;
         let estimatedRidershipSoFar = 0;
         for (let i = 0; i < numHoursPassed; i++) {
             estimatedRidershipSoFar += parseInt(hourlyRidership[i].M.ridership.N);
         }
-        estimatedRidershipSoFar += Math.floor(percentOfHourPassed * parseInt(hourlyRidership[numHoursPassed].M.ridership.N));
+        estimatedRidershipSoFar += percentOfHourPassed * parseInt(hourlyRidership[numHoursPassed].M.ridership.N);
+        estimatedRidershipSoFar = Math.floor(estimatedRidershipSoFar * ridershipRatio);
+
+        // Get the hourly ridership per hour for the current hour.
+        // Scale by daily ridership factor.
+        let ridersPerHour = Math.floor(parseInt(hourlyRidership[numHoursPassed].M.ridership.N) * ridershipRatio);
 
         return {
             statusCode: 200,
