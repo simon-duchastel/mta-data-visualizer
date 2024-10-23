@@ -106,7 +106,7 @@ function ensureFullDayHours(hourlyRidership) {
 // Add daily ridership to each day and add % of daily ridership
 // to each hour
 function populateDailyRidership(hourlyRidership) {
-    for (day in hourlyRidership) {
+    for (const day in hourlyRidership) {
         let dailyTotal = 0;
 
         hourlyRidership[day]["hours"].forEach(hourData => {
