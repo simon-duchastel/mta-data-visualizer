@@ -19,7 +19,7 @@ class SubwayDataService(
     }
 ) {
     /**
-     * Returns the current day's ridership
+     * Returns the current day's ridership, or null if there was an error.
      */
     suspend fun getTodaysRidership(): SubwayRidership? {
         val responseBody = client.getAndHandleErrors(SUBWAY_DATA_URL) ?: return null
@@ -68,6 +68,8 @@ class SubwayDataService(
         val estimatedRidershipToday: Int,
         @SerialName("estimated_ridership_so_far")
         val estimatedRidershipSoFar: Int,
+        @SerialName("riders_per_hour")
+        val ridersPerHour: Int,
     )
 
     companion object {

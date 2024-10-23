@@ -16,12 +16,13 @@ fun RidershipTickerScreen() {
     val viewModel: RidershipTickerViewModel = viewModel { RidershipTickerViewModel() }
     val state: RidershipTickerViewModel.State by viewModel.state.collectAsState()
     val ridership = state.ridership
+    val dayOfWeek = state.dayOfWeek
 
     when {
-        ridership != null -> { // success!
-            val ridershipTicker by animateIntAsState(ridership.estimatedRidershipSoFar)
+        ridership != null && dayOfWeek != null -> { // success!
+            val ridershipTicker by animateIntAsState(ridership.numRiders.toInt())
             RidershipTicker(
-                dayOfWeek = ridership.dayOfWeek,
+                dayOfWeek = dayOfWeek,
                 ridership = ridershipTicker,
             )
         }
