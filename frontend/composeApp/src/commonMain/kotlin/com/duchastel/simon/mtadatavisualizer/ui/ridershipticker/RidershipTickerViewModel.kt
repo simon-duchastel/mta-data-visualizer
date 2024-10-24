@@ -7,6 +7,7 @@ import io.ktor.util.date.WeekDay
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.launch
 
 class RidershipTickerViewModel(
@@ -31,26 +32,7 @@ class RidershipTickerViewModel(
 
     init {
         fetchRidership()
-
-        viewModelScope.launch {
-            _state.collect { state ->
-                if (state.ridership != null && state.ridershipPerSecond != null) {
-                    delay(STATE_UPDATE_DELAY_MS)
-
-                    // normalize to the frequency we're updating the state
-                    val factor: Float = 1_000f / STATE_UPDATE_DELAY_MS
-                    val newRidership = state.ridership.numRiders +
-                            (state.ridershipPerSecond / factor)
-                    updateState {
-                        copy(
-                            ridership = state.ridership.copy(
-                                numRiders = newRidership
-                            )
-                        )
-                    }
-                }
-            }
-        }
+        updateRidership()
     }
 
     // Public functions
@@ -73,7 +55,7 @@ class RidershipTickerViewModel(
                 val ridership = subwayDataService.getTodaysRidership()
 
                 val ridershipPerSecond = ridership?.let {
-                    it.ridersPerHour / 60f / 60f // riders/s = riders/hr * 60min * 60s
+                    it.ridersPerHour / 60f / 60f // riders/s = riders/hr / 60min / 60s
                 }
                 updateState {
                     copy(
@@ -90,8 +72,29 @@ class RidershipTickerViewModel(
         }
     }
 
+    // Update ridership based on per second projection, or no-op if ridership
+    // is uninitialized.
+    private fun updateRidership() {
+        viewModelScope.launch {
+            while (true) {
+                delay(STATE_UPDATE_DELAY_MS)
+
+                updateState {
+                    if (ridership != null && ridershipPerSecond != null) {
+                        // normalize to the frequency we're updating the state
+                        val factor: Float = 1_000f / STATE_UPDATE_DELAY_MS
+                        val newRidership = ridership.numRiders + (ridershipPerSecond / factor)
+                        copy(ridership = ridership.copy(numRiders = newRidership))
+                    } else {
+                        this
+                    }
+                }
+            }
+        }
+    }
+
     private fun updateState(newState: State.() -> State) {
-        _state.value = _state.value.newState()
+        _state.getAndUpdate(newState)
     }
 
     companion object {
