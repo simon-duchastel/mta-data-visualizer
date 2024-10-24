@@ -35,12 +35,12 @@ fun App() {
                 onClick = { darkModeOverride = !currentThemeIsDarkMode }
             ) {
                 val icon = if (currentThemeIsDarkMode) {
-                    painterResource(Res.drawable.light_mode_icon)
-                } else {
                     painterResource(Res.drawable.dark_mode_icon)
+                } else {
+                    painterResource(Res.drawable.light_mode_icon)
                 }
                 Icon(
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(32.dp),
                     painter = icon,
                     contentDescription = stringResource(Res.string.dark_mode_toggle),
                 )
