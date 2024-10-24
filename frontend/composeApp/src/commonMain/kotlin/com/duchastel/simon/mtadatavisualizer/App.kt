@@ -2,6 +2,7 @@ package com.duchastel.simon.mtadatavisualizer
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
 import androidx.compose.material.Scaffold
@@ -14,14 +15,17 @@ import androidx.compose.ui.unit.dp
 import com.duchastel.simon.mtadatavisualizer.ui.AppTheme
 import com.duchastel.simon.mtadatavisualizer.ui.ridershipticker.RidershipTickerScreen
 import mta_data_visualizer.composeapp.generated.resources.Res
+import mta_data_visualizer.composeapp.generated.resources.dark_mode_icon
 import mta_data_visualizer.composeapp.generated.resources.dark_mode_toggle
+import mta_data_visualizer.composeapp.generated.resources.light_mode_icon
+import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
 @Composable
 @Preview
 fun App() {
-    var darkModeOverride: Boolean? by mutableStateOf(null)
+    var darkModeOverride: Boolean? by remember { mutableStateOf(null) }
     val currentThemeIsDarkMode = darkModeOverride ?: isSystemInDarkTheme()
 
     AppTheme(darkTheme = currentThemeIsDarkMode) {
@@ -30,12 +34,16 @@ fun App() {
                 modifier = Modifier.padding(8.dp),
                 onClick = { darkModeOverride = !currentThemeIsDarkMode }
             ) {
-                val vectorIcon = if (currentThemeIsDarkMode) {
-                    Icons.Filled.Lock
+                val icon = if (currentThemeIsDarkMode) {
+                    painterResource(Res.drawable.light_mode_icon)
                 } else {
-                    Icons.Outlined.Lock
+                    painterResource(Res.drawable.dark_mode_icon)
                 }
-                Icon(vectorIcon, stringResource(Res.string.dark_mode_toggle))
+                Icon(
+                    modifier = Modifier.size(48.dp),
+                    painter = icon,
+                    contentDescription = stringResource(Res.string.dark_mode_toggle),
+                )
             }
             RidershipTickerScreen()
         }
