@@ -55,7 +55,7 @@ class RidershipTickerViewModel(
                 val ridership = subwayDataService.getTodaysRidership()
 
                 val ridershipPerSecond = ridership?.let {
-                    it.ridersPerHour / 60f / 60f // riders/s = riders/hr * 60min * 60s
+                    it.ridersPerHour / 60f / 60f // riders/s = riders/hr / 60min / 60s
                 }
                 updateState {
                     copy(
@@ -83,14 +83,8 @@ class RidershipTickerViewModel(
                     if (ridership != null && ridershipPerSecond != null) {
                         // normalize to the frequency we're updating the state
                         val factor: Float = 1_000f / STATE_UPDATE_DELAY_MS
-                        val newRidership = ridership.numRiders +
-                                (ridershipPerSecond / factor).toInt()
-
-                        copy(
-                            ridership = ridership.copy(
-                                numRiders = newRidership
-                            )
-                        )
+                        val newRidership = ridership.numRiders + (ridershipPerSecond / factor)
+                        copy(ridership = ridership.copy(numRiders = newRidership))
                     } else {
                         this
                     }

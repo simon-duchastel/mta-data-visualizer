@@ -9,7 +9,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.duchastel.simon.mtadatavisualizer.ui.FullScreenColumnCentered
+import com.duchastel.simon.mtadatavisualizer.ui.formatAsString
+import com.duchastel.simon.mtadatavisualizer.ui.formatRidershipString
 import io.ktor.util.date.WeekDay
+import mta_data_visualizer.composeapp.generated.resources.Res
+import mta_data_visualizer.composeapp.generated.resources.error
+import mta_data_visualizer.composeapp.generated.resources.loading
+import mta_data_visualizer.composeapp.generated.resources.retry
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun RidershipTickerScreen() {
@@ -38,12 +46,12 @@ private fun RidershipTicker(
 ) {
     FullScreenColumnCentered {
         Text(
-            text = dayOfWeek.value,
+            text = stringResource(formatAsString(dayOfWeek)),
             fontSize = 48.sp,
             fontWeight = FontWeight.Bold,
         )
         Text(
-            text = ridership.toString(),
+            text = formatRidershipString(ridership),
             fontSize = 48.sp,
             fontWeight = FontWeight.Bold,
         )
@@ -56,13 +64,13 @@ private fun Error(
 ) {
     FullScreenColumnCentered {
         Text(
-            text = "Error",
+            text = stringResource(Res.string.error),
             fontSize = 48.sp,
             fontWeight = FontWeight.Bold,
         )
         Button(onClick = onRetryClicked) {
             Text(
-                text = "Retry",
+                text = stringResource(Res.string.retry),
                 fontSize = 48.sp,
                 fontWeight = FontWeight.Bold,
             )
@@ -73,6 +81,6 @@ private fun Error(
 @Composable
 private fun Loading() {
     FullScreenColumnCentered {
-        Text(text = "Loading...")
+        Text(text = stringResource(Res.string.loading))
     }
 }
