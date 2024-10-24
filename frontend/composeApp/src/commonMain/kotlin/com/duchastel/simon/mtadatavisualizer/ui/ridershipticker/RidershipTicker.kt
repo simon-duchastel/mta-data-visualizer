@@ -46,7 +46,7 @@ private fun RidershipTicker(
 ) {
     FullScreenColumnCentered {
         Text(
-            text = stringResource(formatAsString(dayOfWeek)),
+            text = stringResource(formatAsString(dayOfWeek)).also { println("NOW $it") },
             fontSize = 48.sp,
             fontWeight = FontWeight.Bold,
         )
