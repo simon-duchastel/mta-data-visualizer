@@ -8,9 +8,11 @@
 
 **View this project live:** https://mta-data-visualizer.simon.duchastel.com
 
-This project has two components:
-1. Some AWS lambdas that periodically pull daily and hourly ridership data from the MTA published data sets, aggregates them into esimtated hourly ridership by weekday, and cahces the results in some DynamoDB tables.
-2. A website that displays the (estimated) number of people that have ridden the NYC Subway as of the current day down to the second, and updates that number in realtime.
+This project consists of:
+
+1. AWS Lambdas which periodically retrieve and aggregate MTA subway ridership data and store the results in DynamoDB tables organized by day and hour.
+
+2. A web app that displays a real-time estimate of subway ridership per day, updating every continuously.
 
 ## Detailed description
 
