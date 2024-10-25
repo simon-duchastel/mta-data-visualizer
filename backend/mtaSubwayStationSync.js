@@ -16,10 +16,10 @@ async function fetchStations() {
 
     // Query for unique stations in the past 4 weeks
     const selectClause = "$select=distinct station_complex_id,station_complex,borough,latitude,longitude";
-    const whereClause = `$where=transit_mode='subway' and transit_timestamp >= '${fourWeeksAgoISO}'`; 
+    const whereClause = `$where=transit_mode='subway' and transit_timestamp >= '${fourWeeksAgoISO}'`;
     const url = encodeURI(`${MTA_API_URL}?${selectClause}&${whereClause}`);
 
-    const response  = await fetch(url);
+    const response = await fetch(url);
     if (!response.ok) {
         throw new Error(`Error fetching data: ${response.status} ${response.statusText}`);
     }
@@ -28,7 +28,7 @@ async function fetchStations() {
 
 async function fetchAndStoreStations() {
     // Fetch stations
-   const stations = await fetchStations();
+    const stations = await fetchStations();
 
     // Store stations in DynamoDB
     await storeToDynamoDB(stations);
@@ -48,16 +48,19 @@ async function storeToDynamoDB(stations) {
         }
     }));
 
-    const batchParams = {
-        RequestItems: {
-            [tableName]: putRequests
-        }
-    };
+    //  batch 25 requests at a time
+    while (putRequests.length > 0) {
+        const batchParams = {
+            RequestItems: {
+                [tableName]: putRequests.splice(0, 25)
+            }
+        };
 
-    try {
-        await dynamodbClient.send(new BatchWriteCommand(batchParams));
-    } catch (error) {
-        throw new Error(`Error storing data in DynamoDB: ${error.message}`);
+        try {
+            await dynamodbClient.send(new BatchWriteCommand(batchParams));
+        } catch (error) {
+            throw new Error(`Error storing data in DynamoDB: ${error.message}`);
+        }
     }
 }
 
