@@ -14,19 +14,13 @@ This project consists of:
 
 2. A web app that displays a real-time estimate of subway ridership per day, updating every continuously.
 
-## Detailed description
+## Data Management
 
-The project uses two DynamoDB SQL tables in Amazon Web Services (AWS). Each table is populated by AWS lambdas which are scheduled with a cron job.
+Two DynamoDB tables hold the ridership data, updated by cron-scheduled Lambda functions:
 
-The first table aggregates daily ridership data per weekday. The MTA publishes their Daily Ridership dataset once a day, so the lambda that populates this table runs once a week to capture the last seven days worth of data (therefore on any given day of the week, I can expect my cached data to be approximately one week out of date).
+1. Daily Ridership Table: Aggregates daily data from the MTA's Daily dataset, which updates once a day. The Lambda function runs weekly, capturing ridership from the last seven days. Data accuracy is expected to lag by one week.
 
-The second table aggregates hourly ridership data per weekday. The MTA publishes their Hourly Ridership dataset once every two weeks, so the lambda that populates this table runs once a week to capture the most recent two weeks worth of data. Moreover, the Hourly dataset is on a per-station basis instead of overall, which provides more granular data but leads to longer processing time. I can expec this cached data to be at most three weeks out of data based on how often my lambda runs.
-
-[My website](https://mta-data-visualizer.simon.duchastel.com) is a simple single-page webapp built in [Kotlin Multiplatform and Jetpack Compose](https://kotlinlang.org/docs/multiplatform.html). It displays the current day of the week and below that a number updated in-real-time representing the number of people that have currently ridden the subway today.
-
-The ridership counter is estimated by summing up all of the hourly ridership numbers for the given weekday so far, then adding the proportion of the current hour that has already passed. The counter then increments at a rate of the ridership of the current hour divided by 3,600 to convert riders/hour to riders/second. The website syncs its data with the authoritative backend once per minute. All times are in Eastern Time to stay consistent with NYC.
-
-For example: if the website is loaded at 2:15am, then the counter displays: ridership for 12-1am + ridership for 1-2am + (ridership for 2-3am / 4). If the data shows 36,000 rode the subway between 2-3am, the counter increments at a rate of 36,000 / 3,600 = 10/s.
+2. Hourly Ridership Table: Aggregates granular hourly data, with the Lambda function running once a week. The MTA updates this dataset every two weeks so this table's data may be up to three weeks stale.
 
 ## Assumptions
 
