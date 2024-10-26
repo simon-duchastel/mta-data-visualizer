@@ -14,13 +14,21 @@ This project consists of:
 
 2. A web app that displays a real-time estimate of subway ridership per day, updating every continuously.
 
-## Data Management
+## Data
 
 Two DynamoDB tables hold the ridership data, updated by cron-scheduled Lambda functions:
 
 1. Daily Ridership Table: Aggregates daily data from the MTA's Daily dataset, which updates once a day. The Lambda function runs weekly, capturing ridership from the last seven days. Data accuracy is expected to lag by one week.
 
 2. Hourly Ridership Table: Aggregates granular hourly data, with the Lambda function running once a week. The MTA updates this dataset every two weeks so this table's data may be up to three weeks stale.
+
+## Website
+
+The website, built with Kotlin Multiplatform and Jetpack Compose, shows a real-time ridership estimate based on the current weekday and hour. It extrapolates the number of riders historically for the current hour into a per-second rate for updating the counter in real time. The website syncs with the backend once per minute.
+
+For example, if accessed at 2:15 a.m., the hourly totals from midnight to 2 a.m. are user plus 1/4 of the 2–3 a.m. total, and the 2-3am total is divided by 3600 for the rate of change. 
+
+Eastern time is used since the subway is in NYC.
 
 ## Assumptions
 
