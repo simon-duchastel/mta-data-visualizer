@@ -1,4 +1,4 @@
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, DeleteTableCommand, CreateTableCommand } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, BatchWriteCommand } from "@aws-sdk/lib-dynamodb";
 
 // Initialize DynamoDB
@@ -46,7 +46,7 @@ async function storeToDynamoDB(stations) {
         }
     }));
 
-    //  batch 25 requests at a time
+    // batch 25 requests at a time
     while (putRequests.length > 0) {
         const batchParams = {
             RequestItems: {
