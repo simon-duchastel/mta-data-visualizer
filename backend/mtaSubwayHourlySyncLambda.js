@@ -62,8 +62,8 @@ async function fetchAndAggregateData() {
         lastDateInChunk = new Date(chunk[chunk.length - 1]?.transit_timestamp);
     } while (chunk.length === chunkSize && lastDateInChunk >= lastAllowedDate);
 
-    hourlyRidership = ensureFullDayHours(hourlyRidership);
     hourlyRidership = populateDailyRidership(hourlyRidership);
+    perStationRidership = populateComplexDailyRidership;
     return { hourlyRidership, perStationRidership };
 }
 
@@ -84,27 +84,16 @@ function processChunk(chunk, hourlyRidership, perStationRidership, lastAllowedDa
             hourlyRidership[dayOfWeek].hours[hour].ridership += parseInt(entry.ridership) || 0;
 
             // Process per-station ridership
-            if (!perStationRidership[dayOfWeek]) {
-                perStationRidership[dayOfWeek] = { complexId: [] };
+            if (!perStationRidership[complexId]) {
+                perStationRidership[complexId] = {};
             }
             if (!perStationRidership[complexId][dayOfWeek]) {
-                perStationRidership[complexId][dayOfWeek] = { hours: Array(24).fill(0) };
+                perStationRidership[complexId][dayOfWeek] = { hours: Array(24).fill({ridership: 0}) };
             }
-            perStationRidership[complexId][dayOfWeek].hours[hour] += parseInt(entry.ridership) || 0;
+            perStationRidership[complexId][dayOfWeek].hours[hour].ridership += parseInt(entry.ridership) || 0;
         }
     });
     return [hourlyRidership, perStationRidership];
-}
-
-function ensureFullDayHours(hourlyRidership) {
-    Object.keys(hourlyRidership).forEach(day => {
-        for (let hour = 0; hour < 24; hour++) {
-            if (!hourlyRidership[day].hours[hour]) {
-                hourlyRidership[day].hours[hour] = { ridership: 0 };
-            }
-        }
-    });
-    return hourlyRidership;
 }
 
 function populateDailyRidership(hourlyRidership) {
@@ -117,21 +106,58 @@ function populateDailyRidership(hourlyRidership) {
 
         hourlyRidership[day].dailyRidership = dailyTotal;
         hourlyRidership[day].hours.forEach(hourData => {
-            hourData.percent_of_daily = (hourData.ridership / dailyTotal);
+            hourData.percent_of_daily = (hourData.ridership / dailyTotal) || 0;
         });
     }
     return hourlyRidership;
 }
 
+function populateComplexDailyRidership(perStationRidership) {
+    for (const complexId in perStationRidership) {
+        for (const day in perStationRidership[complexId]) {
+            const hourDataArray = perStationRidership[complexId][day].hours;
+            let dailyTotal = 0;
+
+            // Calculate daily total ridership
+            hourDataArray.forEach(hourData => {
+                dailyTotal += hourData.ridership;
+            });
+
+            // Store daily ridership
+            perStationRidership[complexId][day].dailyTotal = dailyTotal;
+
+            // Calculate percentage of daily ridership for each hour
+            hourDataArray.forEach(elem => {
+                const percent = elem.ridership / elem.dailyTotal || 0;
+                perStationRidership[complexId][day].hours[hour].percent_of_daily = percent;
+            });
+        }
+    }
+    return perStationRidership;
+}
+
 async function storeToDynamoDB(data, tableName) {
-    const putRequests = Object.keys(data).map(key => ({
-        PutRequest: {
-            Item: {
-                complex_id: key,
-                hourly_ridership: data[key].hours
+    const putRequests = [];
+
+    for (const complexId in data) {
+        for (const dayOfWeek in data[complexId]) {
+            for (let hour = 0; hour < 24; hour++) {
+                const ridership = data[complexId][dayOfWeek].hours[hour].ridership || 0;
+
+                putRequests.push({
+                    PutRequest: {
+                        Item: {
+                            complex_id: complexId,
+                            day_of_week: dayOfWeek,
+                            hour: hour,
+                            ridership: ridership,
+                            percent_of_daily: data[complexId][dayOfWeek].hours[hour].percent_of_daily,
+                        }
+                    }
+                });
             }
         }
-    }));
+    }
 
     // batch requests
     while (putRequests.length > 0) {
