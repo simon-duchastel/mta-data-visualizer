@@ -1,4 +1,4 @@
-import { DynamoDBClient, DeleteTableCommand, CreateTableCommand } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, BatchWriteCommand } from "@aws-sdk/lib-dynamodb";
 
 // Initialize DynamoDB
@@ -28,21 +28,45 @@ async function fetchAndStoreStations() {
     const stations = await fetchStations();
     console.log(stations);
 
-    // Store stations in DynamoDB
-    await storeToDynamoDB(stations);
+    // Group stations by complex_id and nest data
+    const groupedStations = groupStations(stations);
+
+    // Store grouped stations in DynamoDB
+    await storeToDynamoDB(groupedStations);
     console.log("All station data stored in DynamoDB.");
+}
+
+function groupStations(stations) {
+    const grouped = {};
+
+    stations.forEach(station => {
+        const id = station.complex_id;
+
+        // Initialize the object for this complex_id if it doesn't exist
+        if (!grouped[id]) {
+            grouped[id] = {
+                id: id,
+                data: []
+            };
+        }
+
+        // Push the station details into the data array
+        grouped[id].data.push({
+            name: station.stop_name,
+            borough: station.borough,
+            latitude: station.gtfs_latitude,
+            longitude: station.gtfs_longitude
+        });
+    });
+
+    // Convert the grouped object to an array
+    return Object.values(grouped);
 }
 
 async function storeToDynamoDB(stations) {
     const putRequests = stations.map(station => ({
         PutRequest: {
-            Item: {
-                id: station.complex_id,
-                name: station.stop_name,
-                borough: station.borough,
-                latitude: station.gtfs_latitude,
-                longitude: station.gtfs_longitude
-            }
+            Item: station
         }
     }));
 
