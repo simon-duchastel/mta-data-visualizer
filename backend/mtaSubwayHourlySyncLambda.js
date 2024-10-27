@@ -142,9 +142,7 @@ async function storePerStationData(perStationData) {
                 putRequests.push({
                     PutRequest: {
                         Item: {
-                            complex_id: complexId,
-                            day_of_week: dayOfWeek,
-                            hour: hour,
+                            complex_id: `${complexId}-${dayOfWeek}-${hour}`,
                             ridership: ridership,
                             percent_of_daily: hours[hour].percent_of_daily,
                         }
