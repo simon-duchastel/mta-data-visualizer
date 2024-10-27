@@ -3,6 +3,7 @@ package com.duchastel.simon.mtadatavisualizer.ui.ridershipticker
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.duchastel.simon.mtadatavisualizer.data.SubwayDataService
+import com.duchastel.simon.mtadatavisualizer.data.SubwayDataService.StationRidership
 import io.ktor.util.date.WeekDay
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,11 +23,22 @@ class RidershipTickerViewModel(
     data class State(
         val dayOfWeek: WeekDay? = null,
         val ridership: Ridership? = null,
-        val ridershipPerSecond: Float? = null,
+        val stationRidership: StationRidership? = null,
         val hasError: Boolean = false,
     ) {
         data class Ridership(
-            val numRiders: Float
+            val numRiders: Float,
+            val ridershipPerSecond: Float,
+        )
+
+        data class StationRidership(
+            val stations: List<Station>,
+        )
+
+        data class Station(
+            val name: String,
+            val numRiders: Float,
+            val ridershipPerSecond: Float,
         )
     }
 
@@ -53,17 +65,32 @@ class RidershipTickerViewModel(
         viewModelScope.launch {
             while (true) {
                 val ridership = subwayDataService.getTodaysRidership()
+                val ridershipPerStation = subwayDataService.getTodaysRidershipTopStations(TOP_STATIONS_TO_FETCH)
 
-                val ridershipPerSecond = ridership?.let {
-                    it.ridersPerHour / 60f / 60f // riders/s = riders/hr / 60min / 60s
-                }
                 updateState {
                     copy(
                         dayOfWeek = ridership?.dayOfWeek,
                         ridership = ridership?.let {
-                            State.Ridership(it.estimatedRidershipSoFar.toFloat())
+                            // riders/s = riders/hr / 60min / 60s
+                            val ridershipPerSecond = it.ridersPerHour / 60f / 60f
+                            State.Ridership(
+                                numRiders = it.estimatedRidershipSoFar.toFloat(),
+                                ridershipPerSecond = ridershipPerSecond,
+                            )
                         },
-                        ridershipPerSecond = ridershipPerSecond,
+                        stationRidership = ridershipPerStation?.let { response ->
+                            State.StationRidership(
+                                stations = response.stations.map {
+                                    // riders/s = riders/hr / 60min / 60s
+                                    val ridershipPerSecond = it.ridersPerHour / 60f / 60f
+                                    State.Station(
+                                        name = it.name,
+                                        numRiders = it.estimatedRidershipSoFar.toFloat(),
+                                        ridershipPerSecond = ridershipPerSecond,
+                                    )
+                                }
+                            )
+                        },
                         hasError = ridership == null,
                     )
                 }
@@ -80,10 +107,10 @@ class RidershipTickerViewModel(
                 delay(STATE_UPDATE_DELAY_MS)
 
                 updateState {
-                    if (ridership != null && ridershipPerSecond != null) {
+                    if (ridership != null) {
                         // normalize to the frequency we're updating the state
                         val factor: Float = 1_000f / STATE_UPDATE_DELAY_MS
-                        val newRidership = ridership.numRiders + (ridershipPerSecond / factor)
+                        val newRidership = ridership.numRiders + (ridership.ridershipPerSecond / factor)
                         copy(ridership = ridership.copy(numRiders = newRidership))
                     } else {
                         this
@@ -98,6 +125,7 @@ class RidershipTickerViewModel(
     }
 
     companion object {
+        private const val TOP_STATIONS_TO_FETCH = 10
         private const val STATE_UPDATE_DELAY_MS = 100L
         private const val REFRESH_DELAY_MS = 60L * 1_000L // refresh the data every minute
     }
