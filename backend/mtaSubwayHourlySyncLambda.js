@@ -17,7 +17,7 @@ const WRITE_BATCH_SIZE = 10;
 const MTA_API_URL = 'https://data.ny.gov/resource/wujg-7c2s.json';
 
 async function fetchMtaData(offset = 0, limit = chunkSize) {
-    const selectClause = "$select=transit_timestamp,ridership,complex_id";
+    const selectClause = "$select=transit_timestamp,ridership,station_complex_id";
     const whereClause = `$where=transit_mode='subway'`;
     const orderClause = "$order=transit_timestamp DESC";
     const limitClause = `$limit=${limit}&$offset=${offset}`;
