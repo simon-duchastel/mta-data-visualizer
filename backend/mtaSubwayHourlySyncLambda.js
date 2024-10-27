@@ -32,13 +32,13 @@ async function fetchMtaData(offset = 0, limit = chunkSize) {
 
 async function fetchAndAggregateData() {
     let hourlyRidership = {
-        Sun: { hours: [] },
-        Mon: { hours: [] },
-        Tue: { hours: [] },
-        Wed: { hours: [] },
-        Thu: { hours: [] },
-        Fri: { hours: [] },
-        Sat: { hours: [] }
+        Sun: { hours: Array(24).fill({ ridership: 0 }) },
+        Mon: { hours: Array(24).fill({ ridership: 0 }) },
+        Tue: { hours: Array(24).fill({ ridership: 0 }) },
+        Wed: { hours: Array(24).fill({ ridership: 0 }) },
+        Thu: { hours: Array(24).fill({ ridership: 0 }) },
+        Fri: { hours: Array(24).fill({ ridership: 0 }) },
+        Sat: { hours: Array(24).fill({ ridership: 0 }) }
     };
     let perStationRidership = {};
     let offset = 0;
@@ -63,7 +63,7 @@ async function fetchAndAggregateData() {
     } while (chunk.length === chunkSize && lastDateInChunk >= lastAllowedDate);
 
     hourlyRidership = populateDailyRidership(hourlyRidership);
-    perStationRidership = populateComplexDailyRidership;
+    perStationRidership = populateComplexDailyRidership(perStationRidership);
     return { hourlyRidership, perStationRidership };
 }
 
@@ -77,10 +77,6 @@ function processChunk(chunk, hourlyRidership, perStationRidership, lastAllowedDa
             const complexId = entry.complex_id;
 
             // Populate overall hourly ridership
-            if (!hourlyRidership[dayOfWeek].hours[hour]) {
-                hourlyRidership[dayOfWeek].hours[hour] = { ridership: 0 };
-            }
-
             hourlyRidership[dayOfWeek].hours[hour].ridership += parseInt(entry.ridership) || 0;
 
             // Process per-station ridership
@@ -88,7 +84,7 @@ function processChunk(chunk, hourlyRidership, perStationRidership, lastAllowedDa
                 perStationRidership[complexId] = {};
             }
             if (!perStationRidership[complexId][dayOfWeek]) {
-                perStationRidership[complexId][dayOfWeek] = { hours: Array(24).fill({ridership: 0}) };
+                perStationRidership[complexId][dayOfWeek] = { hours: Array(24).fill({ ridership: 0 }) };
             }
             perStationRidership[complexId][dayOfWeek].hours[hour].ridership += parseInt(entry.ridership) || 0;
         }
@@ -98,12 +94,7 @@ function processChunk(chunk, hourlyRidership, perStationRidership, lastAllowedDa
 
 function populateDailyRidership(hourlyRidership) {
     for (const day in hourlyRidership) {
-        let dailyTotal = 0;
-
-        hourlyRidership[day].hours.forEach(hourData => {
-            dailyTotal += hourData.ridership;
-        });
-
+        let dailyTotal = hourlyRidership[day].hours.reduce((sum, hourData) => sum + hourData.ridership, 0);
         hourlyRidership[day].dailyRidership = dailyTotal;
         hourlyRidership[day].hours.forEach(hourData => {
             hourData.percent_of_daily = (hourData.ridership / dailyTotal) || 0;
@@ -116,34 +107,38 @@ function populateComplexDailyRidership(perStationRidership) {
     for (const complexId in perStationRidership) {
         for (const day in perStationRidership[complexId]) {
             const hourDataArray = perStationRidership[complexId][day].hours;
-            let dailyTotal = 0;
-
-            // Calculate daily total ridership
-            hourDataArray.forEach(hourData => {
-                dailyTotal += hourData.ridership;
-            });
-
-            // Store daily ridership
+            let dailyTotal = hourDataArray.reduce((sum, hourData) => sum + hourData.ridership, 0);
             perStationRidership[complexId][day].dailyTotal = dailyTotal;
-
-            // Calculate percentage of daily ridership for each hour
-            hourDataArray.forEach(elem => {
-                const percent = elem.ridership / elem.dailyTotal || 0;
-                perStationRidership[complexId][day].hours[hour].percent_of_daily = percent;
+            hourDataArray.forEach(hourData => {
+                hourData.percent_of_daily = (hourData.ridership / dailyTotal) || 0;
             });
         }
     }
     return perStationRidership;
 }
 
-async function storeToDynamoDB(data, tableName) {
+async function storeHourlyData(hourlyData) {
+    const putRequests = Object.keys(hourlyData).map(dayOfWeek => ({
+        PutRequest: {
+            Item: {
+                day_of_week: dayOfWeek,
+                daily_ridership: hourlyData[dayOfWeek].dailyRidership,
+                hourly_ridership: hourlyData[dayOfWeek].hours,
+            }
+        }
+    }));
+
+    await storeToDynamoDB(putRequests, hourlyTableName);
+}
+
+async function storePerStationData(perStationData) {
     const putRequests = [];
 
-    for (const complexId in data) {
-        for (const dayOfWeek in data[complexId]) {
+    for (const complexId in perStationData) {
+        for (const dayOfWeek in perStationData[complexId]) {
+            const hours = perStationData[complexId][dayOfWeek].hours;
             for (let hour = 0; hour < 24; hour++) {
-                const ridership = data[complexId][dayOfWeek].hours[hour].ridership || 0;
-
+                const ridership = hours[hour].ridership || 0;
                 putRequests.push({
                     PutRequest: {
                         Item: {
@@ -151,7 +146,7 @@ async function storeToDynamoDB(data, tableName) {
                             day_of_week: dayOfWeek,
                             hour: hour,
                             ridership: ridership,
-                            percent_of_daily: data[complexId][dayOfWeek].hours[hour].percent_of_daily,
+                            percent_of_daily: hours[hour].percent_of_daily,
                         }
                     }
                 });
@@ -159,7 +154,10 @@ async function storeToDynamoDB(data, tableName) {
         }
     }
 
-    // batch requests
+    await storeToDynamoDB(putRequests, perStationTableName);
+}
+
+async function storeToDynamoDB(putRequests, tableName) {
     while (putRequests.length > 0) {
         const batchParams = {
             RequestItems: {
@@ -171,15 +169,15 @@ async function storeToDynamoDB(data, tableName) {
 
         while (attempt < MAX_WRITE_ATTEMPTS) {
             try {
-                await dynamodbClient.send(new BatchWriteCommand(batchParams));
+                await dynamodbClient.send(new BatchWriteCommand(batchParams));               
                 attempt = 0; // reset number of concurrent failed attempts to 0
                 break;
             } catch (error) {
                 attempt++;
-                console.error(`PUT to dynamo table attempt #${attempt} failed: ${error.message}`);
+                console.error(`PUT to dynamo table ${tableName} attempt #${attempt} failed: ${error.message}`);
 
                 if (attempt < MAX_WRITE_ATTEMPTS) {
-                    console.log(`Retrying in ${WRITE_TIMEOUT_MS/1000}s...`);
+                    console.log(`Retrying in ${WRITE_TIMEOUT_MS / 1000}s...`);
                     await new Promise(resolve => setTimeout(resolve, WRITE_TIMEOUT_MS)); // Wait before retrying
                 } else {
                     throw new Error(`Error storing data in DynamoDB after ${MAX_WRITE_ATTEMPTS} attempts: ${error.message}`);
@@ -189,31 +187,11 @@ async function storeToDynamoDB(data, tableName) {
     }
 }
 
-async function storeHourlyData(aggregatedData) {
-    const hourlyPutRequests = Object.keys(aggregatedData.hourlyRidership).map(dayOfWeek => ({
-        PutRequest: {
-            Item: {
-                day_of_week: dayOfWeek,
-                daily_ridership: aggregatedData.hourlyRidership[dayOfWeek].dailyRidership,
-                hourly_ridership: aggregatedData.hourlyRidership[dayOfWeek].hours,
-            }
-        }
-    }));
-
-    const hourlyBatchParams = {
-        RequestItems: {
-            [hourlyTableName]: hourlyPutRequests
-        }
-    };
-
-    await storeToDynamoDB(hourlyBatchParams.RequestItems, hourlyTableName);
-    await storeToDynamoDB(aggregatedData.perStationRidership, perStationTableName);
-}
-
 export async function handler() {
     try {
         const aggregatedData = await fetchAndAggregateData();
-        await storeHourlyData(aggregatedData);
+        await storeHourlyData(aggregatedData.hourlyRidership);
+        await storePerStationData(aggregatedData.perStationRidership);
         return {
             statusCode: 200,
             body: JSON.stringify('Success: Data stored in DynamoDB')
