@@ -7,12 +7,12 @@ const dynamodbClient = DynamoDBDocumentClient.from(dynamodb);
 const tableName = 'MTA_Subway_Stations';
 
 // Constants
-const DATA_API_URL = 'https://data.ny.gov/resource/wujg-7c2s.json';
+const DATA_API_URL = 'https://data.ny.gov/resource/39hk-dx4f.json';
 
 async function fetchStations() {
     // Query for unique stations
     const selectClause = "$select=complex_id,stop_name,borough,gtfs_latitude,gtfs_longitude";
-    const groupByClause = "$group=complex_id";
+    const groupByClause = "$group=complex_id,stop_name,borough,gtfs_latitude,gtfs_longitude";
     const url = encodeURI(`${DATA_API_URL}?${selectClause}&${groupByClause}`);
 
     const response = await fetch(url);
