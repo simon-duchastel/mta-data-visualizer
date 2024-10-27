@@ -7,19 +7,16 @@ const dynamodbClient = DynamoDBDocumentClient.from(dynamodb);
 const tableName = 'MTA_Subway_Stations';
 
 // Constants
-const MTA_API_URL = 'https://data.ny.gov/resource/wujg-7c2s.json';
+const DATA_API_URL = 'https://data.ny.gov/resource/wujg-7c2s.json';
 
 async function fetchStations() {
-    const dateFourWeeksAgo = new Date();
-    dateFourWeeksAgo.setDate(dateFourWeeksAgo.getDate() - 28);
-    const fourWeeksAgoISO = dateFourWeeksAgo.toISOString().split('T')[0];
-
-    // Query for unique stations in the past 4 weeks
-    const selectClause = "$select=distinct station_complex_id,station_complex,borough,latitude,longitude";
-    const whereClause = `$where=transit_mode='subway' and transit_timestamp >= '${fourWeeksAgoISO}'`;
-    const url = encodeURI(`${MTA_API_URL}?${selectClause}&${whereClause}`);
+    // Query for unique stations
+    const selectClause = "$select=complex_id,stop_name,borough,gtfs_latitude,gtfs_longitude";
+    const groupByClause = "$group=complex_id";
+    const url = encodeURI(`${DATA_API_URL}?${selectClause}&${groupByClause}`);
 
     const response = await fetch(url);
+    console.log(`Finished fetching data from ${DATA_API_URL}`);
     if (!response.ok) {
         throw new Error(`Error fetching data: ${response.status} ${response.statusText}`);
     }
@@ -29,6 +26,7 @@ async function fetchStations() {
 async function fetchAndStoreStations() {
     // Fetch stations
     const stations = await fetchStations();
+    console.log(stations);
 
     // Store stations in DynamoDB
     await storeToDynamoDB(stations);
@@ -39,11 +37,11 @@ async function storeToDynamoDB(stations) {
     const putRequests = stations.map(station => ({
         PutRequest: {
             Item: {
-                id: station.station_complex_id,
-                name: station.station_complex,
+                id: station.complex_id,
+                name: station.stop_name,
                 borough: station.borough,
-                latitude: station.latitude,
-                longitude: station.longitude
+                latitude: station.gtfs_latitude,
+                longitude: station.gtfs_longitude
             }
         }
     }));
