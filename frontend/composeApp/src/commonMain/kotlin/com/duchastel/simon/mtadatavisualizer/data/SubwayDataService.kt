@@ -21,10 +21,18 @@ class SubwayDataService(
     /**
      * Returns the current day's ridership, or null if there was an error.
      */
-    suspend fun getTodaysRidership(includeTopStations: Int? = null): SubwayRidership? {
-        val queryParam = includeTopStations?.let { "top_ridden_stations=$it" } ?: ""
-        val responseBody = client.getAndHandleErrors("$SUBWAY_DATA_URL?$queryParam") ?: return null
+    suspend fun getTodaysRidership(): SubwayRidership? {
+        val responseBody = client.getAndHandleErrors(SUBWAY_TODAY_RIDERSHIP_URL) ?: return null
         return Json.decodeFromString<SubwayRidership>(responseBody)
+    }
+
+    /**
+     * Returns the current day's ridership for the top [num] stations, or null if there was an error.
+     */
+    suspend fun getTodaysRidershipTopStations(num: Int): SubwayRidershipPerStation? {
+        val url = "$SUBWAY_TODAY_STATION_RIDERSHIP_URL?top=$num"
+        val responseBody = client.getAndHandleErrors(url) ?: return null
+        return Json.decodeFromString<SubwayRidershipPerStation>(responseBody)
     }
 
     /**
@@ -73,8 +81,33 @@ class SubwayDataService(
         val ridersPerHour: Int,
     )
 
+    @Serializable
+    data class SubwayRidershipPerStation(
+        @SerialName("day")
+        @Serializable(with = WeekDaySerializer::class)
+        val dayOfWeek: WeekDay,
+        @SerialName("stations")
+        val stations: List<StationRidership>,
+    )
+
+    @Serializable
+    data class StationRidership(
+        @SerialName("complex_id")
+        val id: String,
+        @SerialName("complex_name")
+        val name: String,
+        @SerialName("estimated_ridership_today")
+        val estimatedRidershipToday: Int,
+        @SerialName("estimated_ridership_so_far")
+        val estimatedRidershipSoFar: Int,
+        @SerialName("riders_per_hour")
+        val ridersPerHour: Int,
+    )
+
     companion object {
-        private const val SUBWAY_DATA_URL =
+        private const val SUBWAY_TODAY_RIDERSHIP_URL =
             "https://425c6z3r04.execute-api.us-west-2.amazonaws.com/mtasubwayridership/today"
+        private const val SUBWAY_TODAY_STATION_RIDERSHIP_URL =
+            "https://425c6z3r04.execute-api.us-west-2.amazonaws.com/mtasubwayridership/today/station"
     }
 }
