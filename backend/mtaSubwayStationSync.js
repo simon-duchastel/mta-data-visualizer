@@ -8,6 +8,9 @@ const tableName = 'MTA_Subway_Stations';
 
 // Constants
 const DATA_API_URL = 'https://data.ny.gov/resource/39hk-dx4f.json';
+const MAX_WRITE_ATTEMPTS = 3;
+const WRITE_TIMEOUT_MS = 1000;
+const WRITE_BATCH_SIZE = 10;
 
 async function fetchStations() {
     // Query for unique stations
@@ -26,7 +29,6 @@ async function fetchStations() {
 async function fetchAndStoreStations() {
     // Fetch stations
     const stations = await fetchStations();
-    console.log(stations);
 
     // Group stations by complex_id and nest data
     const groupedStations = groupStations(stations);
@@ -70,18 +72,32 @@ async function storeToDynamoDB(stations) {
         }
     }));
 
-    // batch 25 requests at a time
+    // Batch requests
     while (putRequests.length > 0) {
         const batchParams = {
             RequestItems: {
-                [tableName]: putRequests.splice(0, 25)
+                [tableName]: putRequests.splice(0, WRITE_BATCH_SIZE)
             }
         };
 
-        try {
-            await dynamodbClient.send(new BatchWriteCommand(batchParams));
-        } catch (error) {
-            throw new Error(`Error storing data in DynamoDB: ${error.message}`);
+        let attempt = 0;
+
+        while (attempt < MAX_WRITE_ATTEMPTS) {
+            try {
+                await dynamodbClient.send(new BatchWriteCommand(batchParams));
+                attempt = 0; // reset number of concurrent failed attempts to 0
+                break;
+            } catch (error) {
+                attempt++;
+                console.error(`PUT to dynamo table attempt #${attempt} failed: ${error.message}`);
+
+                if (attempt < MAX_WRITE_ATTEMPTS) {
+                    console.log(`Retrying in ${WRITE_TIMEOUT_MS/1000}s...`);
+                    await new Promise(resolve => setTimeout(resolve, WRITE_TIMEOUT_MS)); // Wait before retrying
+                } else {
+                    throw new Error(`Error storing data in DynamoDB after ${MAX_WRITE_ATTEMPTS} attempts: ${error.message}`);
+                }
+            }
         }
     }
 }
