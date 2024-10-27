@@ -74,7 +74,7 @@ function processChunk(chunk, hourlyRidership, perStationRidership, lastAllowedDa
         if (date >= lastAllowedDate) {
             const dayOfWeek = date.toLocaleString('en-US', { weekday: 'short' });
             const hour = date.getHours();
-            const complexId = entry.complex_id;
+            const complexId = entry.station_complex_id;
 
             // Populate overall hourly ridership
             hourlyRidership[dayOfWeek].hours[hour].ridership += parseInt(entry.ridership) || 0;
