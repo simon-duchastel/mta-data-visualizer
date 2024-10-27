@@ -1,21 +1,21 @@
-import { DynamoDBClient, GetItemCommand } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, ScanCommand, QueryCommand } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
 // Initialize DynamoDB
 const dynamodb = new DynamoDBClient({ region: "us-west-2" });
 const dynamodbClient = DynamoDBDocumentClient.from(dynamodb);
 const dailyTableName = 'MTA_Subway_Daily_Ridership';
-const hourlyTableName = 'MTA_Subway_Hourly_Ridership';
+const hourlyTableName = 'MTA_Subway_Hourly_Ridership_Per_Station';
+const stationsTableName = 'MTA_Subway_Stations';
 
 // Useful constants
 const timeZoneEST = "America/New_York";
 const secondsPerHour = 60 * 60;
 const hoursPerDay = 24;
+const TOP_N = 5; // Define the number of top stations you want to retrieve
 
 // Function to calculate percentage of day passed in EST. Returns a float.
 function calculateDayProgressInEST() {
-    // get the current time and midnight (note this is localized to whatever timezone the
-    // lambda is running in)
     const now = new Date();
     const midnight = new Date();
     midnight.setUTCHours(0, 0, 0, 0);
@@ -23,9 +23,8 @@ function calculateDayProgressInEST() {
     // Calculate the elapsed time in ms
     const totalSecondsInDay = 24 * 60 * 60; // 24hrs x 60min x 60s
     const offsetMsFromEST = getOffsetFromEST();
-    var elapsedMs = now - midnight;
+    let elapsedMs = now - midnight;
 
-    // adjust for the EST offest
     if (elapsedMs < offsetMsFromEST) {
         // if the elapsed time is less than the offset, then we're in a different day than EST.
         // we account for that by adding a day hours after subtracting
@@ -33,23 +32,19 @@ function calculateDayProgressInEST() {
         elapsedMs += totalMsInDay;
     }
     elapsedMs -= offsetMsFromEST;
-    
-    const elapsedSeconds = elapsedMs /= 1000; // convert ms to s
+
+    const elapsedSeconds = elapsedMs / 1000; // convert ms to s
     return elapsedSeconds / totalSecondsInDay;
 }
 
 function getOffsetFromEST() {
     const now = new Date();
-    now.setHours(0, 0, 0, 0, 0,)
+    now.setHours(0, 0, 0, 0);
     const est = new Date(now.toLocaleString("en-US", { timeZone: timeZoneEST }));
     return now - est; // difference between current time and EST-normalized in ms
 }
 
 export async function handler() {
-    /**
-     * AWS Lambda handler to retrieve the current day's subway ridership from DynamoDB
-     * and calculate estimated ridership based on the percentage of the day passed.
-     */
     try {
         const today = new Date();
         const dateFormatter = new Intl.DateTimeFormat('en-US', {
@@ -65,18 +60,11 @@ export async function handler() {
                 day_of_week: { S: dayOfWeek }
             }
         };
-        const hourlyParams = {
-            TableName: hourlyTableName,
-            Key: {
-                day_of_week: { S: dayOfWeek }
-            }
-        }
 
         const dailyData = await dynamodbClient.send(new GetItemCommand(dailyParams));
-        const hourlyData = await dynamodbClient.send(new GetItemCommand(hourlyParams));
 
         // Check if data was found
-        if (!dailyData.Item || !hourlyData.Item) {
+        if (!dailyData.Item) {
             return {
                 statusCode: 404,
                 body: JSON.stringify({ message: `No data found for ${dayOfWeek}` }),
@@ -86,36 +74,56 @@ export async function handler() {
         // Get the daily ridership from DynamoDB
         const subwayRidership = parseInt(dailyData.Item.subway_ridership.N);
 
-        // Calculate a scale factor since the hourly ridership is an underestimate
-        // and daily ridership isn't
-        const ridershipEstimatedFromHourly = parseInt(hourlyData.Item.daily_ridership.N);
-        const ridershipRatio = subwayRidership / ridershipEstimatedFromHourly;
+        // Scan MTA_Subway_Stations to get all complex_ids and metadata
+        const scanParams = {
+            TableName: stationsTableName
+        };
+        const stationData = await dynamodbClient.send(new ScanCommand(scanParams));
 
-        // Calculate the estimated ridership so far in the day by adding up the ridership of
-        // each hour that has already passed plus the ridership of the current hour.
-        // Scale by daily ridership factor.
+        // Collect station details with first name in list as complex name
+        const stations = stationData.Items.map(item => ({
+            complexId: item.complex_id.S,
+            complexName: item.name.L[0].S, // Use the first name in the list
+        }));
+
         const dayProgress = calculateDayProgressInEST();
         const numHoursPassed = Math.floor(dayProgress * hoursPerDay);
-        const percentOfHourPassed = (dayProgress * hoursPerDay) - numHoursPassed;
-        const hourlyRidership = hourlyData.Item.hourly_ridership.L;
-        let estimatedRidershipSoFar = 0;
-        for (let i = 0; i < numHoursPassed; i++) {
-            estimatedRidershipSoFar += parseInt(hourlyRidership[i].M.ridership.N);
-        }
-        estimatedRidershipSoFar += percentOfHourPassed * parseInt(hourlyRidership[numHoursPassed].M.ridership.N);
-        estimatedRidershipSoFar = Math.floor(estimatedRidershipSoFar * ridershipRatio);
+        const topStations = [];
 
-        // Get the hourly ridership per hour for the current hour.
-        // Scale by daily ridership factor.
-        let ridersPerHour = Math.floor(parseInt(hourlyRidership[numHoursPassed].M.ridership.N) * ridershipRatio);
+        for (const station of stations) {
+            const hourlyParams = {
+                TableName: hourlyTableName,
+                KeyConditionExpression: 'complex_id = :complexId and day_of_week = :dayOfWeek',
+                ExpressionAttributeValues: {
+                    ':complexId': { S: station.complexId },
+                    ':dayOfWeek': { S: dayOfWeek }
+                },
+                Limit: 1
+            };
+
+            const hourlyData = await dynamodbClient.send(new QueryCommand(hourlyParams));
+
+            // If hourly data exists for this station, calculate estimated ridership
+            if (hourlyData.Items && hourlyData.Items.length > 0) {
+                const ridership = parseInt(hourlyData.Items[0].ridership.N);
+                topStations.push({
+                    id: station.complexId,
+                    name: station.complexName,
+                    estimatedRidershipToday: subwayRidership,
+                    estimatedRidershipSoFar: Math.floor(ridership * dayProgress), // Scale by day progress
+                    ridersPerHour: Math.floor(ridership / hoursPerDay),
+                });
+            }
+        }
+
+        // Sort stations client-side by estimatedRidershipSoFar, descending
+        topStations.sort((a, b) => b.estimatedRidershipSoFar - a.estimatedRidershipSoFar);
 
         return {
             statusCode: 200,
             body: JSON.stringify({
                 day: dayOfWeek,
-                estimated_ridership_today: subwayRidership,
-                estimated_ridership_so_far: estimatedRidershipSoFar,
-                riders_per_hour: ridersPerHour,
+                stations: topStations.slice(0, TOP_N), // Limit to top N stations
             }),
         };
     } catch (error) {
