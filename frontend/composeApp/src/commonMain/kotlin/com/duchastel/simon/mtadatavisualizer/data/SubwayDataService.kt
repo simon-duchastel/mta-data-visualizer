@@ -21,8 +21,9 @@ class SubwayDataService(
     /**
      * Returns the current day's ridership, or null if there was an error.
      */
-    suspend fun getTodaysRidership(): SubwayRidership? {
-        val responseBody = client.getAndHandleErrors(SUBWAY_DATA_URL) ?: return null
+    suspend fun getTodaysRidership(includeTopStations: Int? = null): SubwayRidership? {
+        val queryParam = includeTopStations?.let { "top_ridden_stations=$it" } ?: ""
+        val responseBody = client.getAndHandleErrors("$SUBWAY_DATA_URL?$queryParam") ?: return null
         return Json.decodeFromString<SubwayRidership>(responseBody)
     }
 
