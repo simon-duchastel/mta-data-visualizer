@@ -88,7 +88,7 @@ export async function handler(event) {
 
         const stations = stationData.Items.map(item => ({
             complexId: item.id.S,
-            complexName: item.name.L[0].S,
+            complexName: item.data.L[0].M.name.S,
         }));
 
         // Calculate a scale factor since the hourly ridership is an underestimate
