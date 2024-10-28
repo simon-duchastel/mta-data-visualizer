@@ -63,6 +63,7 @@ async function fetchAndAggregateData() {
     } while (chunk.length === chunkSize && lastDateInChunk >= lastAllowedDate);
 
     hourlyRidership = populateDailyRidership(hourlyRidership);
+    perStationRidership = populatePerStationRidership(perStationRidership);
     return [hourlyRidership, perStationRidership];
 }
 
@@ -102,6 +103,22 @@ function populateDailyRidership(hourlyRidership) {
         });
     }
     return hourlyRidership;
+}
+
+function populatePerStationRidership(perStationRidership) {
+    for (const dayHourKey in perStationRidership) {
+        const { stations } = perStationRidership[dayHourKey];
+
+        for (const complexId in stations) {
+            const totalSoFar = Array.from({ length: parseInt(dayHourKey.split('-')[1]) }, (_, h) => {
+                const previousHourKey = `${dayHourKey.split('-')[0]}-${h}`;
+                return (perStationRidership[previousHourKey]?.stations[complexId]?.ridership || 0);
+            }).reduce((total, ridership) => total + ridership, 0);
+
+            stations[complexId].ridership_so_far = totalSoFar;
+        }
+    }
+    return perStationRidership;
 }
 
 async function storeHourlyData(hourlyData) {
