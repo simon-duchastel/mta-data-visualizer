@@ -64,7 +64,7 @@ async function fetchAndAggregateData() {
 
     hourlyRidership = populateDailyRidership(hourlyRidership);
     perStationRidership = populateComplexDailyRidership(perStationRidership);
-    return { hourlyRidership, perStationRidership };
+    return [hourlyRidership, perStationRidership];
 }
 
 function processChunk(chunk, hourlyRidership, perStationRidership, lastAllowedDate) {
@@ -84,7 +84,7 @@ function processChunk(chunk, hourlyRidership, perStationRidership, lastAllowedDa
                 perStationRidership[complexId] = {};
             }
             if (!perStationRidership[complexId][dayOfWeek]) {
-                perStationRidership[complexId][dayOfWeek] = { hours: Array(24).fill({ ridership: 0 }) };
+                perStationRidership[complexId][dayOfWeek] = { hours: Array.from({ length: 24 }, () => ({ ridership: 0 })) }
             }
             perStationRidership[complexId][dayOfWeek].hours[hour].ridership += parseInt(entry.ridership) || 0;
         }
@@ -187,9 +187,9 @@ async function storeToDynamoDB(putRequests, tableName) {
 
 export async function handler() {
     try {
-        const aggregatedData = await fetchAndAggregateData();
-        await storeHourlyData(aggregatedData.hourlyRidership);
-        await storePerStationData(aggregatedData.perStationRidership);
+        const [hourlyRidership, perStationRidership] = await fetchAndAggregateData();
+        await storeHourlyData(hourlyRidership);
+        await storePerStationData(perStationRidership);
         return {
             statusCode: 200,
             body: JSON.stringify('Success: Data stored in DynamoDB')
