@@ -10,7 +10,7 @@ const perStationTableName = 'MTA_Subway_Hourly_Ridership_Per_Station';
 // Useful constants
 const chunkSize = 1000;
 const MAX_WRITE_ATTEMPTS = 3;
-const WRITE_TIMEOUT_MS = 1500;
+const WRITE_TIMEOUT_MS = 1000;
 const WRITE_BATCH_SIZE = 10;
 
 // MTA Ridership API endpoint
@@ -32,13 +32,13 @@ async function fetchMtaData(offset = 0, limit = chunkSize) {
 
 async function fetchAndAggregateData() {
     let hourlyRidership = {
-        Sun: { hours: Array(24).fill({ ridership: 0 }) },
-        Mon: { hours: Array(24).fill({ ridership: 0 }) },
-        Tue: { hours: Array(24).fill({ ridership: 0 }) },
-        Wed: { hours: Array(24).fill({ ridership: 0 }) },
-        Thu: { hours: Array(24).fill({ ridership: 0 }) },
-        Fri: { hours: Array(24).fill({ ridership: 0 }) },
-        Sat: { hours: Array(24).fill({ ridership: 0 }) }
+        Sun: { hours: Array.from({ length: 24 }, () => ({ ridership: 0 })) },
+        Mon: { hours: Array.from({ length: 24 }, () => ({ ridership: 0 })) },
+        Tue: { hours: Array.from({ length: 24 }, () => ({ ridership: 0 })) },
+        Wed: { hours: Array.from({ length: 24 }, () => ({ ridership: 0 })) },
+        Thu: { hours: Array.from({ length: 24 }, () => ({ ridership: 0 })) },
+        Fri: { hours: Array.from({ length: 24 }, () => ({ ridership: 0 })) },
+        Sat: { hours: Array.from({ length: 24 }, () => ({ ridership: 0 })) }
     };
     let perStationRidership = {};
     let offset = 0;
@@ -164,7 +164,6 @@ async function storeToDynamoDB(putRequests, tableName) {
         };
 
         let attempt = 0;
-
         while (attempt < MAX_WRITE_ATTEMPTS) {
             try {
                 await dynamodbClient.send(new BatchWriteCommand(batchParams));               
