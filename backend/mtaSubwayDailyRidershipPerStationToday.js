@@ -1,4 +1,4 @@
-import { DynamoDBClient, ScanCommand, QueryCommand } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, ScanCommand, GetItemCommand } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
 // Initialize DynamoDB
@@ -10,10 +10,9 @@ const stationsTableName = 'MTA_Subway_Stations';
 
 // Useful constants
 const timeZoneEST = "America/New_York";
-const secondsPerHour = 60 * 60;
 const hoursPerDay = 24;
 
-// Function to calculate percentage of day passed in EST. Returns a float.
+// Function to calculate percentage of day passed in EST
 function calculateDayProgressInEST() {
     const now = new Date();
     const midnight = new Date();
@@ -41,7 +40,6 @@ function getOffsetFromEST() {
 
 export async function handler(event) {
     try {
-        // Validate the 'top' query parameter
         const top = parseInt(event.queryStringParameters?.top);
         if (isNaN(top) || top < 1 || top > 10) {
             return {
@@ -64,18 +62,14 @@ export async function handler(event) {
                 day_of_week: { S: dayOfWeek }
             }
         };
-
         const dailyData = await dynamodbClient.send(new GetItemCommand(dailyParams));
 
-        // Check if data was found
         if (!dailyData.Item) {
             return {
                 statusCode: 404,
                 body: JSON.stringify({ message: `No data found for ${dayOfWeek}` }),
             };
         }
-
-        // Get the daily ridership from DynamoDB
         const subwayRidership = parseInt(dailyData.Item.subway_ridership.N);
 
         // Scan MTA_Subway_Stations to get all complex_ids and metadata
@@ -84,7 +78,6 @@ export async function handler(event) {
         };
         const stationData = await dynamodbClient.send(new ScanCommand(scanParams));
 
-        // Collect station details with first name in list as complex name
         const stations = stationData.Items.map(item => ({
             complexId: item.complex_id.S,
             complexName: item.name.L[0].S,
@@ -95,32 +88,27 @@ export async function handler(event) {
         const topStations = [];
 
         for (const station of stations) {
+            const compositeKey = `${station.complexId}-${dayOfWeek}-${numHoursPassed}`;
             const hourlyParams = {
                 TableName: hourlyTableName,
-                KeyConditionExpression: 'complex_id = :complexId and day_of_week = :dayOfWeek',
-                ExpressionAttributeValues: {
-                    ':complexId': { S: station.complexId },
-                    ':dayOfWeek': { S: dayOfWeek }
-                },
-                Limit: 1
+                Key: {
+                    'complex_id': { S: compositeKey }
+                }
             };
 
-            const hourlyData = await dynamodbClient.send(new QueryCommand(hourlyParams));
-
-            // If hourly data exists for this station, calculate estimated ridership
-            if (hourlyData.Items && hourlyData.Items.length > 0) {
-                const ridership = parseInt(hourlyData.Items[0].ridership.N);
+            const hourlyData = await dynamodbClient.send(new GetItemCommand(hourlyParams));
+            if (hourlyData.Item) {
+                const ridership = parseInt(hourlyData.Item.ridership.N);
                 topStations.push({
                     id: station.complexId,
                     name: station.complexName,
-                    estimatedRidershipToday: subwayRidership,
+                    estimatedRidershipToday: ridership,
                     estimatedRidershipSoFar: Math.floor(ridership * dayProgress),
                     ridersPerHour: Math.floor(ridership / hoursPerDay),
                 });
             }
         }
 
-        // Sort stations client-side by estimatedRidershipSoFar, descending
         topStations.sort((a, b) => b.estimatedRidershipSoFar - a.estimatedRidershipSoFar);
 
         return {
