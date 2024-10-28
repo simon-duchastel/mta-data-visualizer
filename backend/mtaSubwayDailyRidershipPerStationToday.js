@@ -12,28 +12,23 @@ const stationsTableName = 'MTA_Subway_Stations';
 const timeZoneEST = "America/New_York";
 const secondsPerHour = 60 * 60;
 const hoursPerDay = 24;
-const TOP_N = 5; // Define the number of top stations you want to retrieve
 
 // Function to calculate percentage of day passed in EST. Returns a float.
 function calculateDayProgressInEST() {
     const now = new Date();
     const midnight = new Date();
     midnight.setUTCHours(0, 0, 0, 0);
-
-    // Calculate the elapsed time in ms
-    const totalSecondsInDay = 24 * 60 * 60; // 24hrs x 60min x 60s
+    const totalSecondsInDay = 24 * 60 * 60;
     const offsetMsFromEST = getOffsetFromEST();
     let elapsedMs = now - midnight;
 
     if (elapsedMs < offsetMsFromEST) {
-        // if the elapsed time is less than the offset, then we're in a different day than EST.
-        // we account for that by adding a day hours after subtracting
         const totalMsInDay = totalSecondsInDay * 1000;
         elapsedMs += totalMsInDay;
     }
     elapsedMs -= offsetMsFromEST;
 
-    const elapsedSeconds = elapsedMs / 1000; // convert ms to s
+    const elapsedSeconds = elapsedMs / 1000;
     return elapsedSeconds / totalSecondsInDay;
 }
 
@@ -41,11 +36,20 @@ function getOffsetFromEST() {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     const est = new Date(now.toLocaleString("en-US", { timeZone: timeZoneEST }));
-    return now - est; // difference between current time and EST-normalized in ms
+    return now - est;
 }
 
-export async function handler() {
+export async function handler(event) {
     try {
+        // Validate the 'top' query parameter
+        const top = parseInt(event.queryStringParameters?.top);
+        if (isNaN(top) || top < 1 || top > 10) {
+            return {
+                statusCode: 400,
+                body: JSON.stringify({ error: "'top' must be an integer between 1 and 10" }),
+            };
+        }
+
         const today = new Date();
         const dateFormatter = new Intl.DateTimeFormat('en-US', {
             weekday: "short",
@@ -83,7 +87,7 @@ export async function handler() {
         // Collect station details with first name in list as complex name
         const stations = stationData.Items.map(item => ({
             complexId: item.complex_id.S,
-            complexName: item.name.L[0].S, // Use the first name in the list
+            complexName: item.name.L[0].S,
         }));
 
         const dayProgress = calculateDayProgressInEST();
@@ -110,7 +114,7 @@ export async function handler() {
                     id: station.complexId,
                     name: station.complexName,
                     estimatedRidershipToday: subwayRidership,
-                    estimatedRidershipSoFar: Math.floor(ridership * dayProgress), // Scale by day progress
+                    estimatedRidershipSoFar: Math.floor(ridership * dayProgress),
                     ridersPerHour: Math.floor(ridership / hoursPerDay),
                 });
             }
@@ -123,7 +127,8 @@ export async function handler() {
             statusCode: 200,
             body: JSON.stringify({
                 day: dayOfWeek,
-                stations: topStations.slice(0, TOP_N), // Limit to top N stations
+                estimated_ridership_today: subwayRidership,
+                top_stations: topStations.slice(0, top),
             }),
         };
     } catch (error) {
