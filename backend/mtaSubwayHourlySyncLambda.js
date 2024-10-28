@@ -142,7 +142,8 @@ async function storePerStationData(perStationData) {
         putRequests.push({
             PutRequest: {
                 Item: {
-                    id: dayHourKey,
+                    complex_id: dayHourKey,
+                    ridership: 0,
                     stations: perStationData[dayHourKey].stations
                 }
             }
