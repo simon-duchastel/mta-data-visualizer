@@ -63,7 +63,6 @@ async function fetchAndAggregateData() {
     } while (chunk.length === chunkSize && lastDateInChunk >= lastAllowedDate);
 
     hourlyRidership = populateDailyRidership(hourlyRidership);
-    perStationRidership = populateComplexDailyRidership(perStationRidership);
     return [hourlyRidership, perStationRidership];
 }
 
@@ -75,18 +74,20 @@ function processChunk(chunk, hourlyRidership, perStationRidership, lastAllowedDa
             const dayOfWeek = date.toLocaleString('en-US', { weekday: 'short' });
             const hour = date.getHours();
             const complexId = entry.station_complex_id;
+            const ridership = parseInt(entry.ridership) || 0;
 
             // Populate overall hourly ridership
-            hourlyRidership[dayOfWeek].hours[hour].ridership += parseInt(entry.ridership) || 0;
+            hourlyRidership[dayOfWeek].hours[hour].ridership += ridership;
 
             // Process per-station ridership
-            if (!perStationRidership[complexId]) {
-                perStationRidership[complexId] = {};
+            const dayHourKey = `${dayOfWeek}-${hour}`;
+            if (!perStationRidership[dayHourKey]) {
+                perStationRidership[dayHourKey] = { stations: {} };
             }
-            if (!perStationRidership[complexId][dayOfWeek]) {
-                perStationRidership[complexId][dayOfWeek] = { hours: Array.from({ length: 24 }, () => ({ ridership: 0 })) }
+            if (!perStationRidership[dayHourKey].stations[complexId]) {
+                perStationRidership[dayHourKey].stations[complexId] = { ridership: 0 };
             }
-            perStationRidership[complexId][dayOfWeek].hours[hour].ridership += parseInt(entry.ridership) || 0;
+            perStationRidership[dayHourKey].stations[complexId].ridership += ridership;
         }
     });
     return [hourlyRidership, perStationRidership];
@@ -101,20 +102,6 @@ function populateDailyRidership(hourlyRidership) {
         });
     }
     return hourlyRidership;
-}
-
-function populateComplexDailyRidership(perStationRidership) {
-    for (const complexId in perStationRidership) {
-        for (const day in perStationRidership[complexId]) {
-            const hourDataArray = perStationRidership[complexId][day].hours;
-            let dailyTotal = hourDataArray.reduce((sum, hourData) => sum + hourData.ridership, 0);
-            perStationRidership[complexId][day].dailyTotal = dailyTotal;
-            hourDataArray.forEach(hourData => {
-                hourData.percent_of_daily = (hourData.ridership / dailyTotal) || 0;
-            });
-        }
-    }
-    return perStationRidership;
 }
 
 async function storeHourlyData(hourlyData) {
@@ -134,22 +121,15 @@ async function storeHourlyData(hourlyData) {
 async function storePerStationData(perStationData) {
     const putRequests = [];
 
-    for (const complexId in perStationData) {
-        for (const dayOfWeek in perStationData[complexId]) {
-            const hours = perStationData[complexId][dayOfWeek].hours;
-            for (let hour = 0; hour < 24; hour++) {
-                const ridership = hours[hour].ridership || 0;
-                putRequests.push({
-                    PutRequest: {
-                        Item: {
-                            complex_id: `${complexId}-${dayOfWeek}-${hour}`,
-                            ridership: ridership,
-                            percent_of_daily: hours[hour].percent_of_daily,
-                        }
-                    }
-                });
+    for (const dayHourKey in perStationData) {
+        putRequests.push({
+            PutRequest: {
+                Item: {
+                    id: dayHourKey,
+                    stations: perStationData[dayHourKey].stations
+                }
             }
-        }
+        });
     }
 
     await storeToDynamoDB(putRequests, perStationTableName);
@@ -166,7 +146,7 @@ async function storeToDynamoDB(putRequests, tableName) {
         let attempt = 0;
         while (attempt < MAX_WRITE_ATTEMPTS) {
             try {
-                await dynamodbClient.send(new BatchWriteCommand(batchParams));               
+                await dynamodbClient.send(new BatchWriteCommand(batchParams));
                 attempt = 0; // reset number of concurrent failed attempts to 0
                 break;
             } catch (error) {
@@ -175,7 +155,7 @@ async function storeToDynamoDB(putRequests, tableName) {
 
                 if (attempt < MAX_WRITE_ATTEMPTS) {
                     console.log(`Retrying in ${WRITE_TIMEOUT_MS / 1000}s...`);
-                    await new Promise(resolve => setTimeout(resolve, WRITE_TIMEOUT_MS)); // Wait before retrying
+                    await new Promise(resolve => setTimeout(resolve, WRITE_TIMEOUT_MS));
                 } else {
                     throw new Error(`Error storing data in DynamoDB after ${MAX_WRITE_ATTEMPTS} attempts: ${error.message}`);
                 }
