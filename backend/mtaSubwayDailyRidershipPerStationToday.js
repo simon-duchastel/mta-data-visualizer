@@ -1,4 +1,4 @@
-import { DynamoDBClient, BatchGetItemCommand, GetItemCommand, ScanCommand } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, GetItemCommand, ScanCommand } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
 // Initialize DynamoDB
@@ -87,7 +87,7 @@ export async function handler(event) {
         const stationData = await dynamodbClient.send(new ScanCommand(scanParams));
 
         const stations = stationData.Items.map(item => ({
-            complexId: item.complex_id.S,
+            complexId: item.id.S,
             complexName: item.name.L[0].S,
         }));
 
