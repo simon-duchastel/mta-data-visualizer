@@ -103,15 +103,16 @@ export async function handler(event) {
         const topStations = [];
         const currentHourKey = `${dayOfWeek}-${numHoursPassed}`;
         for (const station of stations) {
-            const hourlyParams = {
+            const hourlyPerStationParams = {
                 TableName: hourlyPerStationTableName,
                 Key: {
-                    "complex_id": { S: currentHourKey }
+                    "complex_id": { S: currentHourKey },
+                    "ridership": { N: "0" },
                 }
             };
 
             // Get the current hour's data
-            const hourlyData = await dynamodbClient.send(new GetItemCommand(hourlyParams));
+            const hourlyData = await dynamodbClient.send(new GetItemCommand(hourlyPerStationParams));
             const ridersCurrentHour = hourlyData.Item ? parseInt(hourlyData.Item.M.ridership.N) : 0;
 
             // Calculate the estimated ridership so far
