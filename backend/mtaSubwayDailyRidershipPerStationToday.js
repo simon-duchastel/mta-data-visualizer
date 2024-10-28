@@ -68,7 +68,7 @@ export async function handler(event) {
             Key: {
                 day_of_week: { S: dayOfWeek }
             }
-        }
+        };
         const dailyData = await dynamodbClient.send(new GetItemCommand(dailyParams));
         const hourlyData = await dynamodbClient.send(new GetItemCommand(hourlyParams));
 
@@ -100,53 +100,44 @@ export async function handler(event) {
         const numHoursPassed = Math.floor(dayProgress * hoursPerDay);
         const percentOfHourPassed = (dayProgress * hoursPerDay) - numHoursPassed;
 
-        // Fetch all 24 hours of data for the top stations
         const topStations = [];
-        for (const station of stations.slice(0, top)) {
-            const keys = Array.from({ length: hoursPerDay }, (_, hour) => ({
-                "complex_id": { S: `${station.complexId}-${dayOfWeek}-${hour}` }
-            }));
+        const currentHourKey = `${dayOfWeek}-${numHoursPassed}`;
+        for (const station of stations) {
             const hourlyParams = {
-                RequestItems: {
-                    [hourlyPerStationTableName]: {
-                        Keys: keys
-                    }
+                TableName: hourlyPerStationTableName,
+                Key: {
+                    "complex_id": { S: currentHourKey }
                 }
             };
-            const hourlyData = await dynamodbClient.send(new BatchGetItemCommand(hourlyParams));
-            const hourlyRidership = hourlyData.Responses[hourlyPerStationTableName].map(item => parseInt(item.ridership.N));
 
-            // Sum ridership data up to the current hour
-            let estimatedRidershipSoFar = 0;
-            for (let i = 0; i < numHoursPassed; i++) {
-                estimatedRidershipSoFar += hourlyRidership[i];
-            }
-            estimatedRidershipSoFar += percentOfHourPassed * hourlyRidership[numHoursPassed];
-            estimatedRidershipSoFar = Math.floor(estimatedRidershipSoFar * ridershipRatio);
+            // Get the current hour's data
+            const hourlyData = await dynamodbClient.send(new GetItemCommand(hourlyParams));
+            const ridersCurrentHour = hourlyData.Item ? parseInt(hourlyData.Item.M.ridership.N) : 0;
 
-            // Calculate riders per hour for the current hour, scaled
-            const ridersPerHour = hourlyRidership[numHoursPassed] * ridershipRatio;
-
-            // Calculate total estimated ridership for the day based on hourly totals
-            const totalDayRidership = Math.floor(hourlyRidership.reduce((sum, hour) => sum + hour, 0) * ridershipRatio);
+            // Calculate the estimated ridership so far
+            const ridershipToDate = hourlyData.Item ? parseInt(hourlyData.Item.M.ridership_so_far.N) : 0;
+            let estimatedRidershipSoFar = ridershipToDate + (ridersCurrentHour * percentOfHourPassed);
 
             topStations.push({
                 id: station.complexId,
                 name: station.complexName,
-                estimatedRidershipToday: totalDayRidership,
-                estimatedRidershipSoFar,
-                ridersPerHour,
+                estimated_ridership_so_far: Math.floor(estimatedRidershipSoFar * ridershipRatio),
+                riders_per_hour: ridersCurrentHour * ridershipRatio,
             });
         }
 
+        // Sort stations by estimated ridership so far immediately after calculating
         topStations.sort((a, b) => b.estimatedRidershipSoFar - a.estimatedRidershipSoFar);
+
+        // Only take the top N stations
+        const finalTopStations = topStations.slice(0, top);
 
         return {
             statusCode: 200,
             body: JSON.stringify({
                 day: dayOfWeek,
                 estimated_ridership_today: subwayRidership,
-                top_stations: topStations.slice(0, top),
+                top_stations: finalTopStations,
             }),
         };
     } catch (error) {
