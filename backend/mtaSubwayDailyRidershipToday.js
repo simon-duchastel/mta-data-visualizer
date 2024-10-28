@@ -107,7 +107,7 @@ export async function handler() {
 
         // Get the hourly ridership per hour for the current hour.
         // Scale by daily ridership factor.
-        let ridersPerHour = Math.floor(parseInt(hourlyRidership[numHoursPassed].M.ridership.N) * ridershipRatio);
+        let ridersPerHour = parseInt(hourlyRidership[numHoursPassed].M.ridership.N) * ridershipRatio;
 
         return {
             statusCode: 200,
