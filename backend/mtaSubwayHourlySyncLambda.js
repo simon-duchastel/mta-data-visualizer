@@ -10,7 +10,7 @@ const perStationTableName = 'MTA_Subway_Hourly_Ridership_Per_Station';
 // Useful constants
 const chunkSize = 1000;
 const MAX_WRITE_ATTEMPTS = 3;
-const WRITE_TIMEOUT_MS = 1000;
+const WRITE_TIMEOUT_MS = 1500;
 const WRITE_BATCH_SIZE = 10;
 
 // MTA Ridership API endpoint
