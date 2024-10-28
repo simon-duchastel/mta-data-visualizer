@@ -39,6 +39,13 @@ function getOffsetFromEST() {
     return now - est;
 }
 
+/**
+ * Valid query params:
+ * - top (required): number between 0 < n <= 10 of # of stations to return
+ * - sortBy (optional): how to sort stations. Defaults to "total". Values:
+ *   - total: sort stations by total daily ridership so far.
+ *   - rate: sort stations by current hourly ridership.
+ */
 export async function handler(event) {
     try {
         const top = parseInt(event.queryStringParameters?.top);
@@ -46,6 +53,13 @@ export async function handler(event) {
             return {
                 statusCode: 400,
                 body: JSON.stringify({ error: "'top' must be an integer between 1 and 10" }),
+            };
+        }
+        const sortBy = event.queryStringParameters?.sortBy || "total"
+        if (sortBy !== "total" && sortBy !== "rate") {
+            return {
+                statusCode: 400,
+                body: JSON.stringify({ error: "'sortBy' must be either 'total' or 'rate'" }),
             };
         }
 
@@ -100,35 +114,42 @@ export async function handler(event) {
         const numHoursPassed = Math.floor(dayProgress * hoursPerDay);
         const percentOfHourPassed = (dayProgress * hoursPerDay) - numHoursPassed;
 
+        // Get the current hour's data and filter the top N stations
         const topStations = [];
         const currentHourKey = `${dayOfWeek}-${numHoursPassed}`;
+        const hourlyPerStationParams = {
+            TableName: hourlyPerStationTableName,
+            Key: {
+                "complex_id": { S: currentHourKey },
+                "ridership": { N: "0" },
+            }
+        };
+        const hourlyStationData = await dynamodbClient.send(new GetItemCommand(hourlyPerStationParams));
+        const item = hourlyStationData.Item.stations
         for (const station of stations) {
-            const hourlyPerStationParams = {
-                TableName: hourlyPerStationTableName,
-                Key: {
-                    "complex_id": { S: currentHourKey },
-                    "ridership": { N: "0" },
-                }
-            };
-
-            // Get the current hour's data
-            const hourlyData = await dynamodbClient.send(new GetItemCommand(hourlyPerStationParams));
-            const ridersCurrentHour = hourlyData.Item ? parseInt(hourlyData.Item.M.ridership.N) : 0;
-
-            // Calculate the estimated ridership so far
-            const ridershipToDate = hourlyData.Item ? parseInt(hourlyData.Item.M.ridership_so_far.N) : 0;
+            // Calculate the estimated ridership so far for this station
+            const id = station.complexId
+            if (!item.M[id]) continue // skip if this station isn't present in our data
+            const ridersCurrentHour = item ? parseInt(item.M[id].M.ridership.N) : 0;
+            const ridershipToDate = item ? parseInt(item.M[id].M.ridership_so_far.N) : 0;
             let estimatedRidershipSoFar = ridershipToDate + (ridersCurrentHour * percentOfHourPassed);
 
             topStations.push({
-                id: station.complexId,
+                id: id,
                 name: station.complexName,
                 estimated_ridership_so_far: Math.floor(estimatedRidershipSoFar * ridershipRatio),
                 riders_per_hour: ridersCurrentHour * ridershipRatio,
             });
         }
 
-        // Sort stations by estimated ridership so far immediately after calculating
-        topStations.sort((a, b) => b.estimatedRidershipSoFar - a.estimatedRidershipSoFar);
+        // Sort stations
+        topStations.sort((a, b) => {
+            if (sortBy === "total") {
+                return b.estimated_ridership_so_far - a.estimated_ridership_so_far
+            } else {
+                return b.riders_per_hour - a.riders_per_hour
+            }
+        });
 
         // Only take the top N stations
         const finalTopStations = topStations.slice(0, top);
@@ -137,7 +158,6 @@ export async function handler(event) {
             statusCode: 200,
             body: JSON.stringify({
                 day: dayOfWeek,
-                estimated_ridership_today: subwayRidership,
                 top_stations: finalTopStations,
             }),
         };
