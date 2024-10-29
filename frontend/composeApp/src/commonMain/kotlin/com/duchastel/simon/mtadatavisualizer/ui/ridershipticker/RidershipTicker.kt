@@ -9,9 +9,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.Button
+import androidx.compose.material.Icon
+import androidx.compose.material.IconButton
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -31,9 +35,13 @@ import com.duchastel.simon.mtadatavisualizer.ui.formatRidershipString
 import com.duchastel.simon.mtadatavisualizer.ui.ridershipticker.RidershipTickerViewModel.State
 import io.ktor.util.date.WeekDay
 import mta_data_visualizer.composeapp.generated.resources.Res
+import mta_data_visualizer.composeapp.generated.resources.dark_mode_toggle
 import mta_data_visualizer.composeapp.generated.resources.error
 import mta_data_visualizer.composeapp.generated.resources.loading
 import mta_data_visualizer.composeapp.generated.resources.retry
+import mta_data_visualizer.composeapp.generated.resources.train_enabled
+import mta_data_visualizer.composeapp.generated.resources.train_disabled
+import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -67,16 +75,31 @@ private fun RidershipTicker(
     val sortedStations = stationRidership.stations.sortedByDescending { it.numRiders }
     var showStationList by remember { mutableStateOf(false) }
 
+    // station list button (outside of tickers box so it doesn't affect the centering
+    // of the tickers)
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Spacer(modifier = Modifier.weight(1f))
+        IconButton(
+            modifier = Modifier.padding(8.dp),
+            onClick = { showStationList = !showStationList }
+        ) {
+            val icon = if (showStationList) {
+                Res.drawable.train_enabled
+            } else {
+                Res.drawable.train_disabled
+            }
+            Icon(
+                modifier = Modifier.size(32.dp),
+                painter = painterResource(icon),
+                contentDescription = stringResource(Res.string.dark_mode_toggle),
+            )
+        }
+    }
+
+    // tickers
     FullScreenColumnCentered {
         MainRidershipTicker(dayOfWeek, ridership)
-
         Spacer(modifier = Modifier.height(16.dp))
-
-        // Button to toggle station list
-        Button(onClick = { showStationList = !showStationList }) {
-            Text("Show Top 10 Stations")
-        }
-
         AnimatedVisibility(visible = showStationList) {
             StationRidershipList(sortedStations)
         }
@@ -112,22 +135,27 @@ private fun StationRidershipList(stationRidership: List<State.Station>) {
 
 @Composable
 private fun StationRidershipTicker(station: State.Station) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = station.name,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Medium
-        )
-        Text(
-            text = formatRidershipString(station.numRiders.toInt()),
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Medium
-        )
+    Row {
+        Spacer(modifier = Modifier.weight(1f))
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = station.name,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.width(24.dp))
+            Text(
+                text = formatRidershipString(station.numRiders.toInt()),
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+        Spacer(modifier = Modifier.weight(1f))
     }
 }
 
