@@ -3,6 +3,7 @@ package com.duchastel.simon.mtadatavisualizer.ui.ridershipticker
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.Button
@@ -99,7 +99,7 @@ private fun RidershipTicker(
     // tickers
     FullScreenColumnCentered {
         MainRidershipTicker(dayOfWeek, ridership)
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(32.dp))
         AnimatedVisibility(visible = showStationList) {
             StationRidershipList(sortedStations)
         }
@@ -135,12 +135,17 @@ private fun StationRidershipList(stationRidership: List<State.Station>) {
 
 @Composable
 private fun StationRidershipTicker(station: State.Station) {
-    Row {
-        Spacer(modifier = Modifier.weight(1f))
+    BoxWithConstraints {
+        // set the fill to 1/3 until the content gets to 600dp, at which
+        // point we set the fill to whatever value reaches a size of 400
+        // (not exceeding 1, since we can't fill more than 100%)
+        val fill = (600f / maxWidth.value)
+            .coerceAtLeast(1/3f)
+            .coerceAtMost(1f)
         Row(
             modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .fillMaxWidth(fill)
+                .padding(horizontal = 32.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
@@ -148,14 +153,13 @@ private fun StationRidershipTicker(station: State.Station) {
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Medium
             )
-            Spacer(modifier = Modifier.width(24.dp))
+
             Text(
                 text = formatRidershipString(station.numRiders.toInt()),
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Medium
             )
         }
-        Spacer(modifier = Modifier.weight(1f))
     }
 }
 
