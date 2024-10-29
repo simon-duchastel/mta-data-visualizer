@@ -20,8 +20,6 @@ fun formatAsString(weekDay: WeekDay): StringResource {
         WeekDay.FRIDAY -> Res.string.friday_short
         WeekDay.SATURDAY -> Res.string.saturday_short
         WeekDay.SUNDAY -> Res.string.sunday_short
-    }.also {
-        println(it)
     }
 }
 

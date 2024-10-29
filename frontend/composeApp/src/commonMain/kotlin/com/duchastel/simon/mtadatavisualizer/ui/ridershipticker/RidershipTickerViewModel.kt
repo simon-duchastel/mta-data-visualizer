@@ -106,15 +106,23 @@ class RidershipTickerViewModel(
             while (true) {
                 delay(STATE_UPDATE_DELAY_MS)
 
+                val factor: Float = 1_000f / STATE_UPDATE_DELAY_MS
                 updateState {
-                    if (ridership != null) {
-                        // normalize to the frequency we're updating the state
-                        val factor: Float = 1_000f / STATE_UPDATE_DELAY_MS
-                        val newRidership = ridership.numRiders + (ridership.ridershipPerSecond / factor)
-                        copy(ridership = ridership.copy(numRiders = newRidership))
-                    } else {
-                        this
+                    val updatedRidership = ridership?.let {
+                        val newRidership = it.numRiders + (it.ridershipPerSecond / factor)
+                        it.copy(numRiders = newRidership)
                     }
+                    val updatedStationRidership = stationRidership?.let {
+                        val newStations = it.stations.map { station ->
+                            val newRidership = station.numRiders + (station.ridershipPerSecond / factor)
+                            station.copy(numRiders = newRidership)
+                        }
+                        it.copy(stations = newStations)
+                    }
+                    copy(
+                        ridership = updatedRidership,
+                        stationRidership = updatedStationRidership,
+                    )
                 }
             }
         }
@@ -126,7 +134,7 @@ class RidershipTickerViewModel(
 
     companion object {
         private const val TOP_STATIONS_TO_FETCH = 10
-        private const val STATE_UPDATE_DELAY_MS = 100L
+        private const val STATE_UPDATE_DELAY_MS = 50L
         private const val REFRESH_DELAY_MS = 60L * 1_000L // refresh the data every minute
     }
 }
