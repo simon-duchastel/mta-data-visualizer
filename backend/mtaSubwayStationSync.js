@@ -80,7 +80,7 @@ function groupStations(stations) {
     });
 
     // Update station names if there are duplicates based on name
-    result.forEach(group => {
+    stationsWithName.forEach(group => {
         if (canonicalNameCount[group.name] > 1) {
             group.data.forEach(station => {
                 const routes = station.routes.split(' ').join('/');
@@ -89,7 +89,7 @@ function groupStations(stations) {
         }
     });
 
-    return result;
+    return stationsWithName;
 }
 
 async function storeToDynamoDB(stations) {
