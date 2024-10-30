@@ -14,8 +14,8 @@ const WRITE_BATCH_SIZE = 10;
 
 async function fetchStations() {
     // Query for unique stations
-    const selectClause = "$select=complex_id,stop_name,borough,gtfs_latitude,gtfs_longitude";
-    const groupByClause = "$group=complex_id,stop_name,borough,gtfs_latitude,gtfs_longitude";
+    const selectClause = "$select=complex_id,stop_name,borough,gtfs_latitude,gtfs_longitude,daytime_routes";
+    const groupByClause = "$group=complex_id,stop_name,borough,gtfs_latitude,gtfs_longitude,daytime_routes";
     const url = encodeURI(`${DATA_API_URL}?${selectClause}&${groupByClause}`);
 
     const response = await fetch(url);
@@ -55,14 +55,41 @@ function groupStations(stations) {
         // Push the station details into the data array
         grouped[id].data.push({
             name: station.stop_name,
+            routes: station.daytime_routes,
             borough: station.borough,
             latitude: station.gtfs_latitude,
             longitude: station.gtfs_longitude
         });
     });
 
-    // Convert the grouped object to an array
-    return Object.values(grouped);
+    // Convert the grouped object to an array and add canonical names
+    const stationsWithName = Object.values(grouped).map(group => {
+        // Set canonical name for the complex (if there are multiple)
+        const updatedGroup = {
+            ...group,
+            name: group.data[0].name,
+        };
+
+        return updatedGroup;
+    });
+
+    // Count occurrences of canonical names to find duplicates
+    const canonicalNameCount = {};
+    stationsWithName.forEach(group => {
+        canonicalNameCount[group.name] = (canonicalNameCount[group.name] || 0) + 1;
+    });
+
+    // Update station names if there are duplicates based on name
+    stationsWithName.forEach(group => {
+        if (canonicalNameCount[group.name] > 1) {
+            group.data.forEach(station => {
+                const routes = station.routes.split(' ').join('/');
+                station.name = `${station.name} (${routes})`;
+            });
+        }
+    });
+
+    return stationsWithName;
 }
 
 async function storeToDynamoDB(stations) {
