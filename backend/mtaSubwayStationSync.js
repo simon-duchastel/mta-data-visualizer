@@ -82,10 +82,11 @@ function groupStations(stations) {
     // Update station names if there are duplicates based on name
     stationsWithName.forEach(group => {
         if (canonicalNameCount[group.name] > 1) {
+            let routes = []
             group.data.forEach(station => {
-                const routes = station.routes.split(' ').join('/');
-                station.name = `${station.name} (${routes})`;
+                routes.push(...station.routes.split(' '));
             });
+            group.name = `${group.name} (${routes.join('/')})`;
         }
     });
 
