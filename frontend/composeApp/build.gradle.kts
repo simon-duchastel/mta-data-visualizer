@@ -10,19 +10,20 @@ plugins {
 
 kotlin {
     js {
-        moduleName = "composeApp"
-        binaries.executable()
+        moduleName = "jsComposeApp"
         browser {
             useCommonJs()
             commonWebpackConfig {
                 outputFileName = "$moduleName.js"
             }
         }
+        binaries.executable()
+        useEsModules()
     }
 
     @OptIn(ExperimentalWasmDsl::class)
     wasmJs {
-        moduleName = "composeApp"
+        moduleName = "wasmJsComposeApp"
         browser {
             val rootDirPath = project.rootDir.path
             val projectDirPath = project.projectDir.path
@@ -64,13 +65,6 @@ kotlin {
 
             // Time
             implementation(libs.kotlinx.datetime)
-        }
-
-        val jsMain by getting {
-            dependencies {
-                @Suppress("DEPRECATION")
-                implementation(compose.web.core) // Required for Compose Web/Canvas on JS
-            }
         }
     }
 }
