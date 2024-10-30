@@ -1,4 +1,3 @@
-import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackConfig
 
@@ -10,6 +9,17 @@ plugins {
 }
 
 kotlin {
+    js {
+        moduleName = "composeApp"
+        binaries.executable()
+        browser {
+            useCommonJs()
+            commonWebpackConfig {
+                outputFileName = "$moduleName.js"
+            }
+        }
+    }
+
     @OptIn(ExperimentalWasmDsl::class)
     wasmJs {
         moduleName = "composeApp"
@@ -17,7 +27,7 @@ kotlin {
             val rootDirPath = project.rootDir.path
             val projectDirPath = project.projectDir.path
             commonWebpackConfig {
-                outputFileName = "composeApp.js"
+                outputFileName = "$moduleName.js"
                 devServer = (devServer ?: KotlinWebpackConfig.DevServer()).apply {
                     static = (static ?: mutableListOf()).apply {
                         // Serve sources to debug inside browser
@@ -55,7 +65,12 @@ kotlin {
             // Time
             implementation(libs.kotlinx.datetime)
         }
+
+        val jsMain by getting {
+            dependencies {
+                @Suppress("DEPRECATION")
+                implementation(compose.web.core) // Required for Compose Web/Canvas on JS
+            }
+        }
     }
 }
-
-
