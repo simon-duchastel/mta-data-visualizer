@@ -12,14 +12,26 @@ plugins {
 }
 
 kotlin {
+    js {
+        moduleName = "jsComposeApp"
+        browser {
+            useCommonJs()
+            commonWebpackConfig {
+                outputFileName = "$moduleName.js"
+            }
+        }
+        binaries.executable()
+        useEsModules()
+    }
+
     @OptIn(ExperimentalWasmDsl::class)
     wasmJs {
-        moduleName = "composeApp"
+        moduleName = "wasmJsComposeApp"
         browser {
             val rootDirPath = project.rootDir.path
             val projectDirPath = project.projectDir.path
             commonWebpackConfig {
-                outputFileName = "composeApp.js"
+                outputFileName = "$moduleName.js"
                 devServer = (devServer ?: KotlinWebpackConfig.DevServer()).apply {
                     static = (static ?: mutableListOf()).apply {
                         // Serve sources to debug inside browser
@@ -38,7 +50,7 @@ kotlin {
             jvmTarget.set(JvmTarget.JVM_11)
         }
     }
-    
+
     sourceSets {
 
         androidMain.dependencies {

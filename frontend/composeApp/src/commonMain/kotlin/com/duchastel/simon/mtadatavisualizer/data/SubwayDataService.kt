@@ -10,6 +10,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import io.ktor.util.date.WeekDay
 import kotlinx.serialization.SerialName
+import kotlinx.serialization.SerializationException
 
 class SubwayDataService(
     private val client: HttpClient = HttpClient {
@@ -19,31 +20,42 @@ class SubwayDataService(
     }
 ) {
     /**
-     * Returns the current day's ridership
+     * Returns the current day's ridership, or null if there was an error.
      */
     suspend fun getTodaysRidership(): SubwayRidership? {
-        val responseBody = client.getAndHandleErrors(SUBWAY_DATA_URL) ?: return null
-        return Json.decodeFromString<SubwayRidership>(responseBody)
+        return client.getAndHandleErrors<SubwayRidership>(SUBWAY_TODAY_RIDERSHIP_URL)
+    }
+
+    /**
+     * Returns the current day's ridership for the top [num] stations, or null if there was an error.
+     */
+    suspend fun getTodaysRidershipTopStations(num: Int): SubwayRidershipPerStation? {
+        val url = "$SUBWAY_TODAY_STATION_RIDERSHIP_URL?top=$num"
+        return client.getAndHandleErrors<SubwayRidershipPerStation>(url)
     }
 
     /**
      * Makes a GET call to the provided [url] and returns the body text as a String.
      * In the case of an error, logs the issue and returns null.
      */
-    private suspend fun HttpClient.getAndHandleErrors(
+    private suspend inline fun <reified T> HttpClient.getAndHandleErrors(
         url: String,
         block: HttpRequestBuilder.() -> Unit = {}
-    ): String? {
+    ): T? {
         return try {
             val response = get(url, block)
 
             if (response.status.value == HttpStatusCode.OK.value) {
-                response.bodyAsText()
+                Json.decodeFromString<T>(response.bodyAsText())
             } else {
                 // Log and handle non-OK status codes
                 println("Error: Received status ${response.status}")
                 null
             }
+        } catch (e: SerializationException) {
+            // Handles unexpected response
+            println("Unable to serialize response: ${e.message}")
+            null
         } catch (e: ClientRequestException) {
             // Handles 4xx errors
             println("Client error (${e.response.status}): ${e.message}")
@@ -55,6 +67,10 @@ class SubwayDataService(
         } catch (e: HttpRequestTimeoutException) {
             // Handles timeouts
             println("Connection timed out: ${e.message}")
+            null
+        } catch (e: Exception) {
+            // Handles miscellaneous errors
+            println("Unknown error: ${e.message}")
             null
         }
     }
@@ -68,10 +84,35 @@ class SubwayDataService(
         val estimatedRidershipToday: Int,
         @SerialName("estimated_ridership_so_far")
         val estimatedRidershipSoFar: Int,
+        @SerialName("riders_per_hour")
+        val ridersPerHour: Float,
+    )
+
+    @Serializable
+    data class SubwayRidershipPerStation(
+        @SerialName("day")
+        @Serializable(with = WeekDaySerializer::class)
+        val dayOfWeek: WeekDay,
+        @SerialName("top_stations")
+        val stations: List<StationRidership>,
+    )
+
+    @Serializable
+    data class StationRidership(
+        @SerialName("id")
+        val id: String,
+        @SerialName("name")
+        val name: String,
+        @SerialName("estimated_ridership_so_far")
+        val estimatedRidershipSoFar: Int,
+        @SerialName("riders_per_hour")
+        val ridersPerHour: Float,
     )
 
     companion object {
-        private const val SUBWAY_DATA_URL =
+        private const val SUBWAY_TODAY_RIDERSHIP_URL =
             "https://425c6z3r04.execute-api.us-west-2.amazonaws.com/mtasubwayridership/today"
+        private const val SUBWAY_TODAY_STATION_RIDERSHIP_URL =
+            "https://425c6z3r04.execute-api.us-west-2.amazonaws.com/mtasubwayridership/today/stations"
     }
 }

@@ -1,4 +1,4 @@
-package com.duchastel.simon.mtadatavisualizer.ui.ridershipticker
+package com.duchastel.simon.mtadatavisualizer.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column

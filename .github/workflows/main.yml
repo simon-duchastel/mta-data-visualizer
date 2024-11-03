@@ -53,11 +53,11 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build with Gradle
-        run: ./gradlew assemble
+        run: ./gradlew jsBrowserDistribution
         working-directory: frontend
 
       - name: Move the built website to /public for upload
-        run: mv ./composeApp/build/dist/wasmJs/productionExecutable ./public
+        run: mv ./composeApp/build/dist/js/productionExecutable ./public
         working-directory: frontend
 
       - name: Upload the website
